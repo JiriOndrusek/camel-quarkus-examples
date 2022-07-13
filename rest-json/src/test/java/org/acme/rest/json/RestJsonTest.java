@@ -16,55 +16,62 @@
  */
 package org.acme.rest.json;
 
-import io.quarkus.test.junit.QuarkusTest;
-import org.junit.jupiter.api.Test;
+import java.util.Collections;
+import java.util.LinkedHashSet;
+import java.util.Set;
 
-import static io.restassured.RestAssured.given;
-import static org.hamcrest.CoreMatchers.is;
-import static org.hamcrest.Matchers.containsInAnyOrder;
+import io.quarkus.test.junit.QuarkusTest;
+import org.apache.camel.Produce;
+import org.apache.camel.ProducerTemplate;
+import org.apache.camel.RoutesBuilder;
+import org.apache.camel.builder.RouteBuilder;
+import org.apache.camel.quarkus.test.CamelQuarkusTestSupport;
+import org.junit.jupiter.api.Test;
 
 /**
  * JVM mode tests.
  */
 @QuarkusTest
-public class RestJsonTest {
+//@TestInstance(TestInstance.Lifecycle.PER_CLASS)
+public class RestJsonTest extends CamelQuarkusTestSupport {
 
-    @Test
-    public void fruits() {
+    private final Set<Fruit> fruits = Collections.synchronizedSet(new LinkedHashSet<>());
+    private final Set<Legume> legumes = Collections.synchronizedSet(new LinkedHashSet<>());
 
-        /* Assert the initial fruits are there */
-        given()
-                .when().get("/fruits")
-                .then()
-                .statusCode(200)
-                .body(
-                        "$.size()", is(2),
-                        "name", containsInAnyOrder("Apple", "Pineapple"),
-                        "description", containsInAnyOrder("Winter fruit", "Tropical fruit"));
+    @Produce("direct:start")
+    protected ProducerTemplate template;
 
-        /* Add a new fruit */
-        given()
-                .body("{\"name\": \"Pear\", \"description\": \"Winter fruit\"}")
-                .header("Content-Type", "application/json")
-                .when()
-                .post("/fruits")
-                .then()
-                .statusCode(200)
-                .body(
-                        "$.size()", is(3),
-                        "name", containsInAnyOrder("Apple", "Pineapple", "Pear"),
-                        "description", containsInAnyOrder("Winter fruit", "Tropical fruit", "Winter fruit"));
+    public RestJsonTest() {
+
+        /* Let's add some initial fruits */
+        this.fruits.add(new Fruit("Apple", "Winter fruit"));
+        this.fruits.add(new Fruit("Pineapple", "Tropical fruit"));
+
+        /* Let's add some initial legumes */
+        this.legumes.add(new Legume("Carrot", "Root vegetable, usually orange"));
+        this.legumes.add(new Legume("Zucchini", "Summer squash"));
     }
 
     @Test
-    public void legumes() {
-        given()
-                .when().get("/legumes")
-                .then()
-                .statusCode(200)
-                .body("$.size()", is(2),
-                        "name", containsInAnyOrder("Carrot", "Zucchini"),
-                        "description", containsInAnyOrder("Root vegetable, usually orange", "Summer squash"));
+    public void fruits() throws Exception {
+
+        getMockEndpoint("mock:result").expectedMessageCount(1);
+
+        template.sendBody("direct:getFruits", null);
+
+        assertMockEndpointsSatisfied();
     }
 
+    @Override
+    protected RoutesBuilder createRouteBuilder() {
+        return new RouteBuilder() {
+            @Override
+            public void configure() {
+
+                from("direct:getFruits")
+                        .setBody().constant(fruits)
+                        .to("mock:result");
+            }
+        };
+    }
 }

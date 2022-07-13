@@ -18,12 +18,10 @@ package org.acme.rest.json;
 
 import java.util.Objects;
 
-import io.quarkus.runtime.annotations.RegisterForReflection;
-
 /**
  * A REST entity representing a legume.
  */
-@RegisterForReflection // Lets Quarkus register this class for reflection during the native build
+//@RegisterForReflection // Lets Quarkus register this class for reflection during the native build
 public class Legume {
     private String name;
     private String description;
