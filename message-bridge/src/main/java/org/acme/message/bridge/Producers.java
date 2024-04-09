@@ -36,7 +36,7 @@ public class Producers {
      * Since there is no IBM MQ extension for quarkus, we need to create the connection factory manually
      *
      * @param  pooledJmsRuntimeConfig pooled jms configuration
-     * @return         a new connection factory instance
+     * @return                        a new connection factory instance
      */
     @Identifier("ibmConnectionFactory")
     public ConnectionFactory createXAConnectionFactory(PooledJmsRuntimeConfig pooledJmsRuntimeConfig) {
