@@ -28,8 +28,8 @@
     <description>Camel Quarkus Example :: openapi-contract-first</description>
 
     <properties>
-        <quarkus.platform.version>3.25.0</quarkus.platform.version>
-        <camel-quarkus.platform.version>3.26.0-SNAPSHOT</camel-quarkus.platform.version>
+        <quarkus.platform.version>3.18.0</quarkus.platform.version>
+        <camel-quarkus.platform.version>3.18.0</camel-quarkus.platform.version>
 
         <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
