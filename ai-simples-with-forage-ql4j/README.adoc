@@ -4,7 +4,7 @@ build kaoto/forage locally from https://github.com/KaotoIO/forage
 
 add forage plugin: camel plugin add forage --command='forage' --description='Forage Camel JBang Plugin' --artifactId='camel-jbang-plugin-forage' --groupId='io.kaoto.forage' --version='1.0-SNAPSHOT' --gav='io.kaoto.forage:camel-jbang-plugin-forage:1.0-SNAPSHOT'
 
-start: camel forage run --runtime=quarkus main-route.camel.yaml forage-agent-factory.properties --dep=mvn:io.kaoto.forage:forage-agent:1.0-SNAPSHOT --dep=mvn:io.quarkiverse.langchain4j:quarkus-langchain4j-ollama:1.2.2 --dep=mvn:io.kaoto.forage:forage-model-camel-quarkus-deployment:1.0-SNAPSHOT
+start: camel forage run --runtime=quarkus main-route.camel.yaml forage-agent-factory.properties --dep=mvn:io.kaoto.forage:forage-agent:1.0-SNAPSHOT --dep=mvn:io.quarkiverse.langchain4j:quarkus-langchain4j-ollama:1.2.2 --dep=mvn:io.kaoto.forage:forage-model-camel-quarkus:1.0-SNAPSHOT
 
 
 ask model: curl -i -X POST -H 'Content-Type: text/html' -d '"Hello. my printer emits smoke!"' http://localhost:8080/camel/chat
