@@ -1,0 +1,19 @@
+- route:
+    id: route-1732
+    from:
+      id: from-3538
+      uri: platform-http
+      parameters:
+        path: /camel/chat
+      steps:
+        - convertBodyTo:
+            id: convertBodyTo-1109
+            type: String
+        - unmarshal:
+            id: unmarshal-3445
+            json: {}
+        - to:
+            id: to-3384
+            uri: langchain4j-agent
+            parameters:
+              agentId: "#ollama"
