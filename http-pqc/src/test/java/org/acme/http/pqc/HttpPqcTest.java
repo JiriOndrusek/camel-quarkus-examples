@@ -27,9 +27,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
 public class HttpPqcTest {
@@ -69,27 +69,46 @@ public class HttpPqcTest {
 
     @Test
     public void testPqcHybridEndpoint() {
-        // Test the hybrid certificate info endpoint (no client cert required)
-        RestAssured.given()
-                .when()
-                .get("https://localhost:8443/pqc/hybrid")
-                .then()
-                .statusCode(200)
-                .body(containsString("Chimera"))
-                .body(containsString("RSA"))
-                .body(containsString("Dilithium3"));
+        // Note: With client-auth=required, ALL endpoints require client certificates
+        // The /pqc/hybrid endpoint provides certificate info but still requires TLS auth
+        // Testing without certificate to verify TLS-layer enforcement
+        try {
+            RestAssured.given()
+                    .when()
+                    .get("https://localhost:8443/pqc/hybrid")
+                    .then()
+                    .statusCode(200);
+
+            // If we reach here, test should fail (expected SSL exception)
+            assert false : "Expected SSL exception but connection succeeded";
+        } catch (Exception e) {
+            // Expected: SSL handshake failure (certificate_required)
+            System.out.println("✓ Expected SSL exception for /pqc/hybrid without cert: " + e.getMessage());
+            assertTrue(e.getMessage().contains("certificate_required") ||
+                    e.getMessage().contains("Received fatal alert"),
+                    "Expected certificate_required SSL error, got: " + e.getMessage());
+        }
     }
 
     @Test
     public void testPqcSecureEndpointWithoutClientCert() {
-        // Test /pqc/secure without client certificate - currently returns 401
-        // Note: Client certificate extraction via Vert.x RoutingContext requires additional configuration
-        // See CertificateValidationServiceTest for direct validation service tests
-        RestAssured.given()
-                .when()
-                .get("https://localhost:8443/pqc/secure")
-                .then()
-                .statusCode(401)
-                .body(containsString("No client certificate provided"));
+        // Test /pqc/secure without client certificate
+        // With client-auth=required, TLS handshake fails before reaching the route
+        try {
+            RestAssured.given()
+                    .when()
+                    .get("https://localhost:8443/pqc/secure")
+                    .then()
+                    .statusCode(200); // Should not reach here
+
+            // If no exception, test should fail
+            assert false : "Expected SSL exception but connection succeeded";
+        } catch (Exception e) {
+            // Expected: SSL/TLS handshake failure (certificate_required)
+            System.out.println("✓ Expected SSL exception: " + e.getMessage());
+            assertTrue(e.getMessage().contains("certificate_required") ||
+                    e.getMessage().contains("Received fatal alert"),
+                    "Expected certificate_required SSL error, got: " + e.getMessage());
+        }
     }
 }
