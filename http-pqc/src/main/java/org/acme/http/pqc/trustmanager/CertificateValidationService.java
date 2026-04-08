@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.acme.http.pqc;
+package org.acme.http.pqc.trustmanager;
 
 import java.security.KeyFactory;
 import java.security.PublicKey;

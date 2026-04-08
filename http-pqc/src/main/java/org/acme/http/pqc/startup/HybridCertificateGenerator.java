@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.acme.http.pqc;
+package org.acme.http.pqc.startup;
 
 import java.io.FileOutputStream;
 import java.math.BigInteger;
@@ -59,7 +59,7 @@ public class HybridCertificateGenerator {
     private static final ASN1ObjectIdentifier OID_ALT_SIGNATURE_VALUE = new ASN1ObjectIdentifier("2.5.29.74");
 
     private static final String KEYSTORE_PASSWORD = "changeit";
-    private static final String KEYSTORES_DIR = "src/main/resources/keystores";
+    private static final String KEYSTORES_DIR = "target/classes/keystores";
 
     /**
      * Certificate data holder for keypairs and certificates.

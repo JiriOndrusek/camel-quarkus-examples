@@ -17,14 +17,10 @@
 package org.acme.http.pqc;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
 
 @ApplicationScoped
 public class PqcCamelRoute extends EndpointRouteBuilder {
-
-    @Inject
-    HybridCertificateService hybridCertService;
 
     @Override
     public void configure() throws Exception {
@@ -42,15 +38,5 @@ public class PqcCamelRoute extends EndpointRouteBuilder {
                                 "This demonstrates TLS-layer validation using a custom X509TrustManager.\n" +
                                 "Invalid or RSA-only certificates are rejected during the TLS handshake.\n"))
                 .to(log("pqc-secure").showExchangePattern(false).showBodyType(false));
-
-        // Hybrid certificate info endpoint
-        from(platformHttp("/pqc/hybrid"))
-                .routeId("pqc-hybrid-route")
-                .log("Received request for hybrid certificate information")
-                .process(exchange -> {
-                    String info = hybridCertService.getCertificateInfo();
-                    exchange.getMessage().setBody(info);
-                })
-                .to(log("pqc-hybrid").showExchangePattern(false).showBodyType(false));
     }
 }

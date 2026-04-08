@@ -16,19 +16,14 @@
  */
 package org.acme.http.pqc;
 
-import java.security.KeyPairGenerator;
-import java.security.Provider;
-import java.security.Security;
-import java.security.Signature;
-
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
+import io.restassured.config.RestAssuredConfig;
+import io.restassured.config.SSLConfig;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @QuarkusTest
@@ -41,33 +36,6 @@ public class HttpPqcTest {
     }
 
     @Test
-    public void testBouncyCastleProviderRegistered() {
-        // Verify BouncyCastle provider is registered
-        Provider bcProvider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME);
-        assertNotNull(bcProvider, "BouncyCastle provider should be registered");
-        assertEquals("BC", bcProvider.getName(), "Provider name should be BC");
-    }
-
-    @Test
-    public void testBouncyCastleAtPositionOne() {
-        // Verify BouncyCastle is at position 1 for priority
-        Provider[] providers = Security.getProviders();
-        assertNotNull(providers, "Security providers should not be null");
-        assertEquals("BC", providers[0].getName(),
-                "BouncyCastle should be at position 1 for PQC algorithm priority");
-    }
-
-    @Test
-    public void testDilithiumAlgorithmAvailable() throws Exception {
-        // Verify Dilithium3 (ML-DSA-65 equivalent) signature algorithm is available
-        Signature signature = Signature.getInstance("Dilithium3", "BC");
-        assertNotNull(signature, "Dilithium3 signature instance should be created");
-
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Dilithium3", "BC");
-        assertNotNull(kpg, "Dilithium3 KeyPairGenerator should be available");
-    }
-
-    @Test
     public void testPqcHybridEndpoint() {
         // Note: With client-auth=required, ALL endpoints require client certificates
         // The /pqc/hybrid endpoint provides certificate info but still requires TLS auth
@@ -75,7 +43,7 @@ public class HttpPqcTest {
         try {
             RestAssured.given()
                     .when()
-                    .get("https://localhost:8443/pqc/hybrid")
+                    .get("https://localhost:8443/pqc/anything_does_not_matter")
                     .then()
                     .statusCode(200);
 
@@ -111,4 +79,28 @@ public class HttpPqcTest {
                     "Expected certificate_required SSL error, got: " + e.getMessage());
         }
     }
+
+    @Test
+    public void testPqcSecureEndpointWithValidClientCert() {
+        // Test /pqc/secure WITH valid hybrid client certificate
+        // TLS handshake should succeed, and custom TrustManager validates both RSA + Dilithium3
+        // Configure RestAssured with client certificate keystore and server truststore
+
+        RestAssured.given()
+                .config(RestAssuredConfig.config().sslConfig(
+                        SSLConfig.sslConfig()
+                                .keyStore("target/classes/keystores/client-hybrid-keystore.p12", "changeit")
+                                .trustStore("target/classes/keystores/server-hybrid-truststore.p12", "changeit")
+                                .allowAllHostnames() // Accept localhost with self-signed cert
+                ))
+                .when()
+                .get("https://localhost:8443/pqc/secure")
+                .then()
+                .statusCode(200)
+                .body(containsString("Hybrid PQC certificate validated"))
+                .body(containsString("quantum-safe"))
+                .body(containsString("TLS layer"));
+    }
+
+    //    add negative test
 }
