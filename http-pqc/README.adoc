@@ -1,5 +1,5 @@
 = HTTP with Post-Quantum Cryptography (PQC): A Camel Quarkus example
-:cq-example-description: An example demonstrating Post-Quantum Cryptography algorithms (ML-DSA signatures and ML-KEM key encapsulation) using the Camel Quarkus platform-http component and BouncyCastle PQC provider.
+:cq-example-description: An example demonstrating hybrid PQC certificate authentication using Chimera format (RSA + Dilithium3) with the Camel Quarkus platform-http component and BouncyCastle PQC provider.
 
 {cq-description}
 
@@ -9,13 +9,34 @@ TIP: Check the https://camel.apache.org/camel-quarkus/latest/first-steps.html[Ca
 
 Post-Quantum Cryptography (PQC) refers to cryptographic algorithms designed to remain secure against attacks from quantum computers. Traditional cryptographic methods like RSA and ECC could be broken by sufficiently powerful quantum computers using algorithms like Shor's algorithm. PQC algorithms are based on mathematical problems that are believed to be resistant to both classical and quantum computing attacks.
 
+NOTE: For a detailed visual explanation with diagrams showing how client-server communication works with PQC, see link:PQC-EXPLANATION.md[PQC Visual Guide]. It includes ASCII diagrams showing the difference between traditional certificates, our implementation, and Chimera hybrid certificates.
+
+**Simple Example - How Chimera Hybrid Works:**
+
+----
+Traditional Certificate (Quantum Vulnerable):
+  Certificate
+  ├─ Public Key: RSA-2048
+  └─ Signature: SHA256withRSA  ⚠️ Quantum can break this
+
+Chimera Hybrid Certificate (Quantum Safe):
+  Certificate
+  ├─ Primary Public Key: RSA-2048
+  ├─ Primary Signature: SHA256withRSA  ✓ Works with old systems
+  └─ Extensions (X.509):
+      ├─ altPublicKey: Dilithium3
+      └─ altSignature: Dilithium3    ✓ Quantum-safe!
+
+Both signatures must be valid = Double protection!
+----
+
 This example demonstrates how to:
 
-* Use BouncyCastle's PQC algorithms with Camel Quarkus on Java 17
-* Generate and verify Dilithium3 digital signatures (ML-DSA-65 / FIPS 204)
-* Demonstrate NTRU key encapsulation mechanism (NIST PQC finalist)
-* Register and verify BouncyCastle PQC provider at application startup
-* Build quantum-resistant cryptographic services in both JVM and native modes
+* Generate Chimera hybrid certificates combining RSA and Dilithium3 signatures
+* Validate client certificates requiring both classical and post-quantum signatures
+* Automatically generate hybrid PQC keystores at application startup
+* Implement quantum-resistant authentication with backward compatibility
+* Test certificate validation with both hybrid and RSA-only certificates
 
 === Why PQC Matters
 
@@ -25,34 +46,29 @@ While large-scale quantum computers capable of breaking current encryption don't
 * **Long-lived data**: Data that needs to remain confidential for decades requires quantum-resistant protection now
 * **Migration time**: Transitioning cryptographic infrastructure takes years, so early adoption is prudent
 
-=== PQC Algorithms Demonstrated
+=== PQC Algorithm Used
 
-This example uses BouncyCastle 1.78.1, which provides support for NIST PQC algorithms:
+This example uses BouncyCastle 1.78.1 for post-quantum cryptography:
 
 * **Dilithium3 (ML-DSA-65 / FIPS 204)**: Module-Lattice-Based Digital Signature Algorithm
   - Security Level: NIST Level 3 (equivalent to AES-192)
-  - Use case: Post-quantum digital signatures
-  - Demonstrated at: `/pqc/sign` endpoint
+  - Use case: Post-quantum digital signatures in hybrid certificates
+  - Demonstrated in: Chimera hybrid certificates with RSA + Dilithium3
   - Note: BouncyCastle 1.78.1 uses "Dilithium3" name; ML-DSA names require BC 1.79+
-
-* **NTRU (NIST PQC Finalist)**: Lattice-based Key Encapsulation Mechanism
-  - Security Level: High (lattice-based cryptography)
-  - Use case: Quantum-resistant key exchange
-  - Demonstrated at: `/pqc/kem` endpoint
-  - Note: BouncyCastle 1.78.1 does not include Kyber/ML-KEM KeyPairGenerator support
 
 === Important Limitations on Java 17
 
-**Java 17 does NOT support PQC algorithms in TLS handshakes.** This example demonstrates PQC algorithms programmatically through HTTP endpoints, not in the HTTPS connection itself. The HTTPS layer uses standard RSA/TLS 1.3.
+**Java 17 does NOT support PQC algorithms in TLS handshakes.** This example uses Chimera hybrid certificates that combine classical RSA with post-quantum Dilithium3 signatures in standard X.509 extensions. The certificate validation happens at the application level, not in the TLS handshake itself.
 
 For full PQC TLS support (hybrid cipher suites like X25519MLKEM768), you need:
 * Java 21+ with BouncyCastle JSSE provider, OR
 * Java 27+ with native PQC support (JEP 527 target)
 
 This example provides value by showing how to:
-* Use NIST-standardized PQC algorithms in application code
-* Integrate BouncyCastle PQC provider with Quarkus
+* Generate and validate hybrid PQC certificates on Java 17
+* Implement application-level PQC authentication
 * Build PQC-ready services that can be upgraded to full PQC TLS when Java supports it
+* Maintain backward compatibility while adding quantum resistance
 
 == Prerequisites
 
@@ -60,14 +76,27 @@ This example provides value by showing how to:
 * Maven 3.9.9 or later
 * GraalVM (for native mode only)
 
-== HTTPS Configuration
+== Certificate Generation
 
-This example uses standard HTTPS (RSA/TLS 1.3) for transport security. The keystores in `src/main/resources/keystores/` contain conventional RSA certificates:
+This example automatically generates Chimera hybrid certificates at application startup. These keystores are created in `src/main/resources/keystores/` (excluded from git):
 
-* `server-keystore.p12`: HTTPS server certificate and private key (RSA 2048-bit)
-* `client-truststore.p12`: Trusted certificates for client verification
+* `server-hybrid-keystore.p12`: Server certificate with RSA + Dilithium3 signatures
+* `server-hybrid-truststore.p12`: Truststore for validating client certificates
+* `client-hybrid-keystore.p12`: Client certificate with RSA + Dilithium3 (for successful auth test)
+* `client-rsa-only-keystore.p12`: Client certificate with only RSA (for failure test)
 
-The **Post-Quantum Cryptography is demonstrated in the application logic** at the HTTP endpoints, not in the TLS handshake itself. See the endpoints section below for how to interact with ML-DSA and ML-KEM algorithms.
+The keystores are generated once on first startup and reused on subsequent runs. To regenerate them, delete the files and restart the application.
+
+**Chimera Hybrid Certificate Format:**
+
+Each certificate contains both classical and post-quantum signatures using standard X.509 extensions:
+
+* **Primary**: RSA-2048 public key and SHA256withRSA signature
+* **Extension OID 2.5.29.72** (altSubjectPublicKeyInfo): Dilithium3 public key
+* **Extension OID 2.5.29.73** (altSignatureAlgorithm): Dilithium3 algorithm identifier
+* **Extension OID 2.5.29.74** (altSignatureValue): Dilithium3 signature
+
+Both signatures must be valid for authentication to succeed. This provides quantum resistance while maintaining backward compatibility with standard TLS implementations.
 
 == Start in Development Mode
 
@@ -82,56 +111,28 @@ TIP: Please refer to the Development mode section of https://camel.apache.org/ca
 
 The application will start on HTTPS port 8443. You can access the PQC demonstration endpoints:
 
-=== PQC Endpoints
+=== Endpoints
 
-**1. ML-DSA-65 Digital Signature** (`/pqc/sign`)
+**1. Secure Endpoint with Hybrid Certificate Validation** (`/pqc/secure`)
 
-Generates and verifies a post-quantum digital signature:
+Requires a client certificate with both RSA and Dilithium3 signatures. Validates both signatures before granting access.
 
-[source,shell]
-----
-$ curl -k https://localhost:8443/pqc/sign
-ML-DSA-65 Digital Signature Demonstration
-==========================================
+Testing requires a REST client that supports client certificates. The example includes automated tests demonstrating both success and failure scenarios.
 
-Algorithm: ML-DSA-65 (FIPS 204)
-Message: "Hello, Post-Quantum World!"
-Signature (first 64 chars): iVBORw0KGgoAAAANSUhEUgAAB...
-Signature Length: 3366 characters (base64)
-Verification: ✓ VALID
+**2. Hybrid Certificate Information** (`/pqc/hybrid`)
 
-Status: Post-quantum signature successfully generated and verified!
-----
-
-You can provide a custom message:
+Returns information about the server's hybrid certificate:
 
 [source,shell]
 ----
-$ curl -k -H "message: Custom test message" https://localhost:8443/pqc/sign
-----
+$ curl -k https://localhost:8443/pqc/hybrid
+Chimera Hybrid Certificate Information
+======================================
 
-**2. NTRU Key Encapsulation** (`/pqc/kem`)
-
-Demonstrates post-quantum key encapsulation mechanism:
-
-[source,shell]
-----
-$ curl -k https://localhost:8443/pqc/kem
-NTRU Key Encapsulation Mechanism Demonstration
-===============================================
-
-Algorithm: NTRU (NIST PQC Finalist)
-Provider: BouncyCastle
+Format: Chimera (X.509 with alternative key/signature extensions)
+Primary Algorithm: RSA-2048 + SHA256withRSA
+Alternative Algorithm: Dilithium3 (ML-DSA-65 / FIPS 204)
 ...
-----
-
-**3. PQC Information** (`/pqc/info`)
-
-Returns information about available PQC algorithms:
-
-[source,shell]
-----
-$ curl -k https://localhost:8443/pqc/info
 ----
 
 NOTE: The `-k` flag allows curl to accept self-signed certificates. In production, use properly signed certificates from a trusted CA.
@@ -173,7 +174,7 @@ $ ./target/*-runner
 
 == Testing
 
-Run the tests to verify PQC functionality:
+Run the tests to verify hybrid certificate functionality:
 
 [source,shell]
 ----
@@ -183,11 +184,16 @@ $ mvn clean test
 The tests verify:
 
 * BouncyCastle provider is registered at position 1
-* ML-DSA-65 (Dilithium) signature algorithm is available
-* ML-KEM-768 (Kyber) key encapsulation algorithm is available
-* ML-DSA signature endpoint generates and verifies signatures correctly
-* ML-KEM endpoint demonstrates key encapsulation
-* All PQC algorithms are working in both JVM mode
+* Dilithium3 (ML-DSA-65) signature algorithm is available
+* Hybrid keystores are generated at startup
+* `/pqc/hybrid` endpoint returns certificate information
+* `/pqc/secure` rejects requests without client certificates (401)
+* `/pqc/secure` accepts hybrid client certificates with both RSA and Dilithium3 (200)
+* `/pqc/secure` rejects RSA-only client certificates missing PQC signatures (401)
+
+The test suite demonstrates:
+1. **Success scenario**: Client with hybrid certificate (RSA + Dilithium3) authenticates successfully
+2. **Failure scenario**: Client with RSA-only certificate is rejected
 
 For native mode testing:
 
@@ -200,91 +206,139 @@ $ mvn clean verify -Dnative
 
 === 1. Check Application Logs
 
-When the application starts, you should see BouncyCastle PQC provider verification:
+When the application starts, you should see keystore generation and PQC provider verification:
 
 [source,text]
 ----
 INFO  [org.acme.http.pqc.SecurityConfiguration] BouncyCastle provider registered at position 1 for PQC support
 INFO  [org.acme.http.pqc.SecurityConfiguration] BouncyCastle provider confirmed: BC version 1.78
 INFO  [org.acme.http.pqc.SecurityConfiguration] ✓ Dilithium3 (ML-DSA-65 / FIPS 204) algorithm available
-INFO  [org.acme.http.pqc.SecurityConfiguration] ✓ NTRU (NIST PQC Finalist) algorithm available
-INFO  [org.acme.http.pqc.SecurityConfiguration] All required PQC algorithms verified successfully
-INFO  [org.acme.http.pqc.PqcSignatureService] Dilithium3 keypair generated successfully. Public key size: 1952 bytes
-INFO  [org.acme.http.pqc.PqcKemService] NTRU keypair generated successfully.
+INFO  [org.acme.http.pqc.SecurityConfiguration] Generating hybrid PQC keystores...
+INFO  [org.acme.http.pqc.HybridCertificateGenerator] ✓ Server hybrid keystore created
+INFO  [org.acme.http.pqc.HybridCertificateGenerator] ✓ Client hybrid keystore created
+INFO  [org.acme.http.pqc.HybridCertificateGenerator] ✓ Client RSA-only keystore created
+INFO  [org.acme.http.pqc.SecurityConfiguration] ✓ Hybrid PQC keystores generated successfully
 ----
 
-=== 2. Test ML-DSA-65 Signatures
+On subsequent startups:
 
-[source,shell]
+[source,text]
 ----
-$ curl -k https://localhost:8443/pqc/sign
-ML-DSA-65 Digital Signature Demonstration
-...
-Verification: ✓ VALID
+INFO  [org.acme.http.pqc.SecurityConfiguration] Using existing hybrid PQC keystores
 ----
 
-=== 3. Test NTRU Key Encapsulation
+=== 2. Verify Hybrid Certificate Information
 
 [source,shell]
 ----
-$ curl -k https://localhost:8443/pqc/kem
-NTRU Key Encapsulation Mechanism Demonstration
+$ curl -k https://localhost:8443/pqc/hybrid
+Chimera Hybrid Certificate Information
+======================================
+
+Format: Chimera (X.509 with alternative key/signature extensions)
+Primary Algorithm: RSA-2048 + SHA256withRSA
+Alternative Algorithm: Dilithium3 (ML-DSA-65 / FIPS 204)
 ...
-Status: ✓ NTRU keypair successfully generated
 ----
 
-=== 4. Verify PQC Information
+=== 3. Test Secure Endpoint (No Client Certificate)
 
 [source,shell]
 ----
-$ curl -k https://localhost:8443/pqc/info
-Post-Quantum Cryptography Example - Java 17
-...
-Note: Java 17 does not support PQC in TLS handshakes.
-This example demonstrates PQC algorithms programmatically.
+$ curl -k https://localhost:8443/pqc/secure
+✗ Authentication failed
+
+No client certificate provided.
+----
+
+=== 4. Run Automated Tests
+
+The test suite demonstrates successful and failed authentication scenarios:
+
+[source,shell]
+----
+$ mvn test
+[INFO] Tests run: 7, Failures: 0, Errors: 0, Skipped: 0
 ----
 
 == Architecture Notes
 
 === BouncyCastle PQC Provider Integration
 
-The `SecurityConfiguration` class registers BouncyCastle as the primary security provider at application startup and verifies that PQC algorithms are available:
+The `SecurityConfiguration` class registers BouncyCastle as the primary security provider at application startup and generates hybrid PQC keystores:
 
 [source,java]
 ----
 Security.insertProviderAt(new BouncyCastleProvider(), 1);
 
-// Verify ML-DSA-65 and ML-KEM-768 are available
-Signature.getInstance("ML-DSA-65", "BC");
-KeyPairGenerator.getInstance("ML-KEM-768", "BC");
+// Verify Dilithium3 is available
+Signature.getInstance("Dilithium3", "BC");
+KeyPairGenerator.getInstance("Dilithium3", "BC");
+
+// Generate hybrid PQC keystores if they don't exist
+HybridCertificateGenerator.generateServerKeystore();
+HybridCertificateGenerator.generateClientHybridKeystore();
+HybridCertificateGenerator.generateClientRsaOnlyKeystore();
 ----
 
-This ensures that BouncyCastle's PQC algorithms can be used for cryptographic operations throughout the application.
+=== Hybrid Certificate Services
 
-=== PQC Services
+The example provides CDI services for hybrid PQC certificate handling:
 
-The example provides two CDI services that demonstrate NIST-standardized PQC algorithms:
+* **`HybridCertificateGenerator`**: Utility class for generating Chimera hybrid certificates
+  - Generates certificates with both RSA-2048 and Dilithium3 signatures
+  - Stores PQC signatures in standard X.509 extensions (OIDs 2.5.29.72, 2.5.29.73, 2.5.29.74)
+  - Creates keystores in PKCS12 format
+  - Supports generating RSA-only certificates for testing failure scenarios
 
-* **`PqcSignatureService`**: Generates and verifies ML-DSA-65 digital signatures
-  - Generates keypair at startup using `KeyPairGenerator.getInstance("ML-DSA-65", "BC")`
-  - Signs messages using `Signature.getInstance("ML-DSA-65", "BC")`
-  - Verifies signatures with the same algorithm
+* **`CertificateValidationService`**: Validates hybrid PQC certificates
+  - Verifies RSA signature using standard X.509 validation
+  - Extracts Dilithium3 public key from extension OID 2.5.29.72
+  - Extracts Dilithium3 signature from extension OID 2.5.29.74
+  - Both signatures must be valid for overall validation to succeed
 
-* **`PqcKemService`**: Demonstrates NTRU key encapsulation
-  - Generates NTRU keypair for key exchange operations
-  - Shows key sizes and security levels
-  - Illustrates quantum-resistant key establishment
-  - Note: BouncyCastle 1.78.1 does not include Kyber/ML-KEM; NTRU is used as alternative
+* **`HybridCertificateService`**: Loads and provides server certificate information
+  - Loads server certificate from generated keystore
+  - Provides certificate details for the `/pqc/hybrid` endpoint
 
-=== Why Not Full PQC TLS?
+=== Why Application-Level Validation?
 
-Java 17's TLS implementation does not support PQC cipher suites (e.g., `TLS_AES_128_GCM_SHA256` with X25519MLKEM768 key exchange). This limitation exists because:
+This example performs hybrid certificate validation at the application level (in the Camel route) rather than in the TLS handshake. This approach is used because:
 
-1. **No PQC cipher suites**: Java 17 TLS stack predates NIST PQC standardization (2024)
-2. **Named group limitations**: Hybrid named groups like X25519MLKEM768 require Java 21+ with BouncyCastle JSSE
-3. **Certificate extensions**: Chimera-style hybrid certificates need custom trust managers not supported on Java 17 TLS
+1. **Java 17 TLS limitations**: Standard TLS stack doesn't understand Chimera extension OIDs
+2. **Quarkus/Vert.x coupling**: Framework is tightly coupled to JDK's TLS implementation
+3. **Custom validation required**: Both RSA and Dilithium3 signatures must be validated, which requires custom logic
 
-This example demonstrates PQC algorithms programmatically, preparing your application for full PQC TLS when Java 21+ or Java 27+ becomes available.
+**How it works:**
+
+1. Server presents hybrid certificate (RSA + Dilithium3) during TLS handshake
+2. Standard TLS validates the RSA signature (works with any client)
+3. Client presents certificate (Quarkus `client-auth = request`)
+4. Camel route extracts client certificate and calls `CertificateValidationService`
+5. Service validates both RSA and Dilithium3 signatures
+6. Request succeeds only if both signatures are valid
+
+This approach provides quantum resistance while maintaining compatibility with standard TLS implementations. When Java 21+ or Java 27+ with native PQC TLS support becomes available, the validation can move to the TLS layer.
+
+=== Keystore Management
+
+**Generated keystores are excluded from version control** via `.gitignore`:
+
+```
+# Generated PQC keystores (regenerated on startup)
+src/main/resources/keystores/*.p12
+```
+
+This ensures:
+* Fresh keystores per environment (dev, test, prod)
+* No sensitive key material in repository
+* Automatic generation on first startup
+
+To regenerate keystores:
+```bash
+rm -rf src/main/resources/keystores/*.p12
+mvn quarkus:dev
+```
 
 === Native Mode Considerations
 

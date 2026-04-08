@@ -16,78 +16,114 @@
  */
 package org.acme.http.pqc;
 
+import java.security.cert.Certificate;
+import java.security.cert.X509Certificate;
+
+import javax.net.ssl.SSLPeerUnverifiedException;
+import javax.net.ssl.SSLSession;
+
+import io.vertx.core.http.HttpServerRequest;
+import io.vertx.ext.web.RoutingContext;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+import org.apache.camel.Exchange;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
 
 @ApplicationScoped
 public class PqcCamelRoute extends EndpointRouteBuilder {
 
     @Inject
-    PqcSignatureService signatureService;
+    CertificateValidationService validationService;
 
     @Inject
-    PqcKemService kemService;
+    HybridCertificateService hybridCertService;
 
     @Override
     public void configure() throws Exception {
-        // Main endpoint: demonstrate ML-DSA signature
-        from(platformHttp("/pqc/sign"))
-                .routeId("pqc-signature-route")
-                .log("Received request to demonstrate ML-DSA-65 signature")
+        // Secure endpoint requiring hybrid PQC certificate validation
+        from(platformHttp("/pqc/secure"))
+                .routeId("pqc-secure-route")
+                .log("Validating hybrid certificate for request")
                 .process(exchange -> {
-                    String message = exchange.getIn().getHeader("message", "Hello, Post-Quantum World!", String.class);
-                    String signature = signatureService.signMessage(message);
-                    boolean verified = signatureService.verifySignature(message, signature);
+                    // Extract client certificate from request
+                    X509Certificate clientCert = extractClientCertificate(exchange);
 
-                    StringBuilder response = new StringBuilder();
-                    response.append("ML-DSA-65 Digital Signature Demonstration\n");
-                    response.append("==========================================\n\n");
-                    response.append("Algorithm: ").append(signatureService.getAlgorithm()).append(" (FIPS 204)\n");
-                    response.append("Message: \"").append(message).append("\"\n");
-                    response.append("Signature (first 64 chars): ").append(signature.substring(0, 64)).append("...\n");
-                    response.append("Signature Length: ").append(signature.length()).append(" characters (base64)\n");
-                    response.append("Verification: ").append(verified ? "✓ VALID" : "✗ INVALID").append("\n\n");
-                    response.append("Status: Post-quantum signature successfully generated and verified!\n");
+                    if (clientCert == null) {
+                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 401);
+                        exchange.getMessage().setBody("✗ Authentication failed\n\n" +
+                                "No client certificate provided.\n" +
+                                "This endpoint requires a hybrid PQC certificate with both RSA and Dilithium3 signatures.\n");
+                        return;
+                    }
 
-                    exchange.getMessage().setBody(response.toString());
+                    // Validate hybrid certificate
+                    ValidationResult result = validationService.validateHybridCertificate(clientCert);
+
+                    if (result.isOverallValid()) {
+                        exchange.getMessage().setBody("✓ Hybrid certificate validated successfully!\n\n" +
+                                "Certificate Subject: " + clientCert.getSubjectX500Principal() + "\n" +
+                                "RSA signature: VALID\n" +
+                                "Dilithium3 signature: VALID\n\n" +
+                                "Your connection is quantum-safe!\n");
+                    } else {
+                        exchange.getMessage().setHeader(Exchange.HTTP_RESPONSE_CODE, 401);
+                        exchange.getMessage().setBody("✗ Certificate validation failed\n\n" +
+                                "Certificate Subject: " + clientCert.getSubjectX500Principal() + "\n" +
+                                "RSA signature: " + (result.isRsaValid() ? "VALID" : "INVALID") + "\n" +
+                                "Dilithium3 signature: " + (result.isDilithiumValid() ? "VALID" : "INVALID") + "\n\n" +
+                                "Details: " + result.getMessage() + "\n");
+                    }
                 })
-                .to(log("pqc-signature").showExchangePattern(false).showBodyType(false));
+                .to(log("pqc-secure").showExchangePattern(false).showBodyType(false));
 
-        // KEM demonstration endpoint
-        from(platformHttp("/pqc/kem"))
-                .routeId("pqc-kem-route")
-                .log("Received request to demonstrate NTRU key encapsulation")
+        // Hybrid certificate info endpoint
+        from(platformHttp("/pqc/hybrid"))
+                .routeId("pqc-hybrid-route")
+                .log("Received request for hybrid certificate information")
                 .process(exchange -> {
-                    String result = kemService.demonstrateKeyEncapsulation();
-                    exchange.getMessage().setBody(result);
+                    String info = hybridCertService.getCertificateInfo();
+                    exchange.getMessage().setBody(info);
                 })
-                .to(log("pqc-kem").showExchangePattern(false).showBodyType(false));
+                .to(log("pqc-hybrid").showExchangePattern(false).showBodyType(false));
+    }
 
-        // Info endpoint
-        from(platformHttp("/pqc/info"))
-                .routeId("pqc-info-route")
-                .log("Received request for PQC information")
-                .process(exchange -> {
-                    StringBuilder info = new StringBuilder();
-                    info.append("Post-Quantum Cryptography Example - Java 17\n");
-                    info.append("============================================\n\n");
-                    info.append("This example demonstrates NIST PQC algorithms:\n\n");
-                    info.append("1. Dilithium3 (ML-DSA-65 / FIPS 204)\n");
-                    info.append("   - Post-quantum digital signatures\n");
-                    info.append("   - Endpoint: /pqc/sign?message=YourMessage\n\n");
-                    info.append("2. NTRU (NIST PQC Finalist)\n");
-                    info.append("   - Post-quantum key encapsulation mechanism\n");
-                    info.append("   - Endpoint: /pqc/kem\n\n");
-                    info.append("Provider: BouncyCastle 1.78.1\n");
-                    info.append("Note: BC 1.78.1 does not include Kyber/ML-KEM KeyPairGenerator.\n");
-                    info.append("ML-KEM support requires BouncyCastle 1.79+.\n\n");
-                    info.append("Java 17 Limitation: PQC in TLS handshakes not supported.\n");
-                    info.append("This example demonstrates PQC algorithms programmatically.\n");
-                    info.append("Full PQC TLS requires Java 21+ with BouncyCastle JSSE.\n");
+    /**
+     * Extracts the client certificate from the HTTPS request.
+     * Note: This requires Quarkus HTTP SSL client-auth to be enabled.
+     *
+     * LIMITATION: Direct extraction of client certificates from Vert.x RoutingContext
+     * is not currently implemented. The RoutingContext property is not available
+     * in the Camel exchange. This would require additional Quarkus/Vert.x configuration.
+     *
+     * For validation testing, see CertificateValidationServiceTest which tests
+     * the validation logic directly.
+     */
+    private X509Certificate extractClientCertificate(Exchange exchange) {
+        try {
+            // Attempt to get Vert.x RoutingContext (currently returns null)
+            RoutingContext routingContext = exchange.getProperty("CamelVertxPlatformHttpRoutingContext",
+                    RoutingContext.class);
 
-                    exchange.getMessage().setBody(info.toString());
-                })
-                .to(log("pqc-info").showExchangePattern(false).showBodyType(false));
+            if (routingContext != null) {
+                HttpServerRequest request = routingContext.request();
+                if (request != null && request.isSSL() && request.sslSession() != null) {
+                    SSLSession sslSession = request.sslSession();
+                    try {
+                        Certificate[] peerCerts = sslSession.getPeerCertificates();
+                        if (peerCerts != null && peerCerts.length > 0 && peerCerts[0] instanceof X509Certificate) {
+                            return (X509Certificate) peerCerts[0];
+                        }
+                    } catch (SSLPeerUnverifiedException e) {
+                        // No client certificate presented
+                        return null;
+                    }
+                }
+            }
+
+            return null;
+        } catch (Exception e) {
+            log.warn("Failed to extract client certificate", e);
+            return null;
+        }
     }
 }

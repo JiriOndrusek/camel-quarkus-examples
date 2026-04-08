@@ -50,37 +50,48 @@ public class SecurityConfiguration {
 
         // Verify PQC algorithms are available
         verifyPqcAlgorithms();
+
+        // Generate hybrid PQC keystores if they don't exist
+        generateKeystoresIfNeeded();
     }
 
     private void verifyPqcAlgorithms() {
-        boolean dilithiumAvailable = false;
-        boolean ntruAvailable = false;
-
         try {
             // Test Dilithium3 (ML-DSA-65 equivalent, FIPS 204 Level 3) availability
             // BouncyCastle 1.78.1 uses legacy names; ML-DSA names require BC 1.79+
             Signature.getInstance("Dilithium3", "BC");
             KeyPairGenerator.getInstance("Dilithium3", "BC");
-            dilithiumAvailable = true;
             LOG.info("✓ Dilithium3 (ML-DSA-65 / FIPS 204) algorithm available");
         } catch (Exception e) {
             LOG.error("✗ Dilithium3 algorithm NOT available: {}", e.getMessage());
+            throw new RuntimeException("Dilithium3 PQC algorithm not available. Ensure BouncyCastle 1.78+ is on classpath.", e);
         }
 
+        LOG.info("Required PQC algorithms verified successfully");
+    }
+
+    private void generateKeystoresIfNeeded() {
         try {
-            // Test NTRU (NIST PQC finalist, lattice-based KEM) availability
-            // Note: BouncyCastle 1.78.1 does not include Kyber/ML-KEM KeyPairGenerator
-            KeyPairGenerator.getInstance("NTRU", "BC");
-            ntruAvailable = true;
-            LOG.info("✓ NTRU (NIST PQC Finalist) algorithm available");
+            String serverKeystorePath = "src/main/resources/keystores/server-hybrid-keystore.p12";
+            String clientHybridKeystorePath = "src/main/resources/keystores/client-hybrid-keystore.p12";
+            String clientRsaOnlyKeystorePath = "src/main/resources/keystores/client-rsa-only-keystore.p12";
+
+            boolean keystoresExist = HybridCertificateGenerator.keystoreExists(serverKeystorePath)
+                    && HybridCertificateGenerator.keystoreExists(clientHybridKeystorePath)
+                    && HybridCertificateGenerator.keystoreExists(clientRsaOnlyKeystorePath);
+
+            if (!keystoresExist) {
+                LOG.info("Generating hybrid PQC keystores...");
+                HybridCertificateGenerator.generateServerKeystore();
+                HybridCertificateGenerator.generateClientHybridKeystore();
+                HybridCertificateGenerator.generateClientRsaOnlyKeystore();
+                LOG.info("✓ Hybrid PQC keystores generated successfully");
+            } else {
+                LOG.info("Using existing hybrid PQC keystores");
+            }
         } catch (Exception e) {
-            LOG.error("✗ NTRU algorithm NOT available: {}", e.getMessage());
+            LOG.error("Failed to generate hybrid PQC keystores", e);
+            throw new RuntimeException("Keystore generation failed", e);
         }
-
-        if (!dilithiumAvailable || !ntruAvailable) {
-            throw new RuntimeException("Required PQC algorithms not available. Ensure BouncyCastle 1.78+ is on classpath.");
-        }
-
-        LOG.info("All required PQC algorithms verified successfully");
     }
 }

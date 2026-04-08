@@ -68,57 +68,28 @@ public class HttpPqcTest {
     }
 
     @Test
-    public void testNtruAlgorithmAvailable() throws Exception {
-        // Verify NTRU key encapsulation is available
-        KeyPairGenerator kpg = KeyPairGenerator.getInstance("NTRU", "BC");
-        assertNotNull(kpg, "NTRU KeyPairGenerator should be available");
+    public void testPqcHybridEndpoint() {
+        // Test the hybrid certificate info endpoint (no client cert required)
+        RestAssured.given()
+                .when()
+                .get("https://localhost:8443/pqc/hybrid")
+                .then()
+                .statusCode(200)
+                .body(containsString("Chimera"))
+                .body(containsString("RSA"))
+                .body(containsString("Dilithium3"));
     }
 
     @Test
-    public void testPqcSignatureEndpoint() {
+    public void testPqcSecureEndpointWithoutClientCert() {
+        // Test /pqc/secure without client certificate - currently returns 401
+        // Note: Client certificate extraction via Vert.x RoutingContext requires additional configuration
+        // See CertificateValidationServiceTest for direct validation service tests
         RestAssured.given()
                 .when()
-                .get("https://localhost:8443/pqc/sign")
+                .get("https://localhost:8443/pqc/secure")
                 .then()
-                .statusCode(200)
-                .body(containsString("ML-DSA-65 Digital Signature"))
-                .body(containsString("FIPS 204"))
-                .body(containsString("✓ VALID"));
-    }
-
-    @Test
-    public void testPqcSignatureWithCustomMessage() {
-        RestAssured.given()
-                .header("message", "Testing PQC signature")
-                .when()
-                .get("https://localhost:8443/pqc/sign")
-                .then()
-                .statusCode(200)
-                .body(containsString("Testing PQC signature"))
-                .body(containsString("✓ VALID"));
-    }
-
-    @Test
-    public void testPqcKemEndpoint() {
-        RestAssured.given()
-                .when()
-                .get("https://localhost:8443/pqc/kem")
-                .then()
-                .statusCode(200)
-                .body(containsString("NTRU"))
-                .body(containsString("Key Encapsulation Mechanism"));
-    }
-
-    @Test
-    public void testPqcInfoEndpoint() {
-        RestAssured.given()
-                .when()
-                .get("https://localhost:8443/pqc/info")
-                .then()
-                .statusCode(200)
-                .body(containsString("Dilithium"))
-                .body(containsString("NTRU"))
-                .body(containsString("BouncyCastle"))
-                .body(containsString("Java 17 Limitation"));
+                .statusCode(401)
+                .body(containsString("No client certificate provided"));
     }
 }

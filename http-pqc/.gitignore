@@ -1,0 +1,3 @@
+# Generated PQC keystores (regenerated on startup)
+src/main/resources/keystores/*.p12
+src/test/resources/keystores/*.p12
