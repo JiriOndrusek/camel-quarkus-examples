@@ -16,24 +16,8 @@
  */
 package org.acme.http.pqc;
 
-import java.security.Security;
+import io.quarkus.test.junit.QuarkusIntegrationTest;
 
-import io.quarkus.runtime.StartupEvent;
-import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.enterprise.event.Observes;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
-@ApplicationScoped
-public class SecurityConfiguration {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SecurityConfiguration.class);
-
-    void onStart(@Observes StartupEvent ev) {
-        // Register BouncyCastle as the first provider to ensure PQC algorithms are available
-        Security.insertProviderAt(new BouncyCastleProvider(), 1);
-        LOG.info("BouncyCastle provider registered at position 1 for PQC support");
-        LOG.info("Available providers: {}", Security.getProviders().length);
-    }
+@QuarkusIntegrationTest
+public class HttpPqcIT extends HttpPqcTest {
 }
