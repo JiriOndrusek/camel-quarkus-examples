@@ -16,7 +16,10 @@
  */
 package org.acme.http.pqc;
 
+import java.security.KeyPairGenerator;
+import java.security.Provider;
 import java.security.Security;
+import java.security.Signature;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.RestAssured;
@@ -24,9 +27,9 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
-import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.containsString;
-import static org.hamcrest.Matchers.greaterThan;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @QuarkusTest
 public class HttpPqcTest {
@@ -35,27 +38,87 @@ public class HttpPqcTest {
     public static void setUp() {
         // Use relaxed HTTPS validation for self-signed certificates in tests
         RestAssured.useRelaxedHTTPSValidation();
-
-        // Ensure BouncyCastle provider is registered for PQC support
-        if (Security.getProvider(BouncyCastleProvider.PROVIDER_NAME) == null) {
-            Security.insertProviderAt(new BouncyCastleProvider(), 1);
-        }
     }
 
     @Test
-    public void testPqcHttpsEndpoint() {
+    public void testBouncyCastleProviderRegistered() {
+        // Verify BouncyCastle provider is registered
+        Provider bcProvider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME);
+        assertNotNull(bcProvider, "BouncyCastle provider should be registered");
+        assertEquals("BC", bcProvider.getName(), "Provider name should be BC");
+    }
+
+    @Test
+    public void testBouncyCastleAtPositionOne() {
+        // Verify BouncyCastle is at position 1 for priority
+        Provider[] providers = Security.getProviders();
+        assertNotNull(providers, "Security providers should not be null");
+        assertEquals("BC", providers[0].getName(),
+                "BouncyCastle should be at position 1 for PQC algorithm priority");
+    }
+
+    @Test
+    public void testDilithiumAlgorithmAvailable() throws Exception {
+        // Verify Dilithium3 (ML-DSA-65 equivalent) signature algorithm is available
+        Signature signature = Signature.getInstance("Dilithium3", "BC");
+        assertNotNull(signature, "Dilithium3 signature instance should be created");
+
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("Dilithium3", "BC");
+        assertNotNull(kpg, "Dilithium3 KeyPairGenerator should be available");
+    }
+
+    @Test
+    public void testNtruAlgorithmAvailable() throws Exception {
+        // Verify NTRU key encapsulation is available
+        KeyPairGenerator kpg = KeyPairGenerator.getInstance("NTRU", "BC");
+        assertNotNull(kpg, "NTRU KeyPairGenerator should be available");
+    }
+
+    @Test
+    public void testPqcSignatureEndpoint() {
         RestAssured.given()
                 .when()
-                .get("https://localhost:8443/hello")
+                .get("https://localhost:8443/pqc/sign")
                 .then()
                 .statusCode(200)
-                .body(containsString("Successfully connected via PQC-enabled HTTPS"));
+                .body(containsString("ML-DSA-65 Digital Signature"))
+                .body(containsString("FIPS 204"))
+                .body(containsString("✓ VALID"));
     }
 
     @Test
-    public void testBouncyCastleProviderAvailable() {
-        // Verify BouncyCastle provider is available in the security providers
-        assertThat("BouncyCastle provider should be available",
-                Security.getProviders().length, greaterThan(0));
+    public void testPqcSignatureWithCustomMessage() {
+        RestAssured.given()
+                .header("message", "Testing PQC signature")
+                .when()
+                .get("https://localhost:8443/pqc/sign")
+                .then()
+                .statusCode(200)
+                .body(containsString("Testing PQC signature"))
+                .body(containsString("✓ VALID"));
+    }
+
+    @Test
+    public void testPqcKemEndpoint() {
+        RestAssured.given()
+                .when()
+                .get("https://localhost:8443/pqc/kem")
+                .then()
+                .statusCode(200)
+                .body(containsString("NTRU"))
+                .body(containsString("Key Encapsulation Mechanism"));
+    }
+
+    @Test
+    public void testPqcInfoEndpoint() {
+        RestAssured.given()
+                .when()
+                .get("https://localhost:8443/pqc/info")
+                .then()
+                .statusCode(200)
+                .body(containsString("Dilithium"))
+                .body(containsString("NTRU"))
+                .body(containsString("BouncyCastle"))
+                .body(containsString("Java 17 Limitation"));
     }
 }
