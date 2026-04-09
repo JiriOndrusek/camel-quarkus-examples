@@ -1,9 +1,11 @@
-= HTTP with Post-Quantum Cryptography (PQC): A Camel Quarkus example
-:cq-example-description: An example demonstrating hybrid PQC certificate authentication using Chimera format (RSA + Dilithium3) with the Camel Quarkus platform-http component and BouncyCastle PQC provider.
+= HTTP with Post-Quantum Cryptography (PQC): A Camel Quarkus example (Java 17)
+:cq-example-description: A Java 17 example demonstrating hybrid PQC certificate authentication using Chimera format (RSA + Dilithium3) with application-level validation, the Camel Quarkus platform-http component, and BouncyCastle PQC provider.
 
 {cq-description}
 
-This example shows how to implement quantum-resistant TLS authentication by combining classical RSA with post-quantum Dilithium3 signatures in X.509 certificates. Both signatures must be valid for authentication to succeed.
+This example shows how to implement quantum-resistant TLS authentication on **Java 17** by combining classical RSA with post-quantum Dilithium3 signatures in X.509 certificates. Both signatures must be valid for authentication to succeed.
+
+IMPORTANT: This example uses **application-level PQC validation** because Java 17 doesn't support PQC in TLS natively. For full PQC TLS support with hybrid cipher suites, use Java 21+ with BouncyCastle JSSE provider.
 
 TIP: Check the https://camel.apache.org/camel-quarkus/latest/first-steps.html[Camel Quarkus User guide] for prerequisites and other general information.
 
@@ -11,12 +13,16 @@ TIP: Check the https://camel.apache.org/camel-quarkus/latest/first-steps.html[Ca
 
 Post-Quantum Cryptography (PQC) protects against "harvest now, decrypt later" attacks where adversaries capture encrypted data today to decrypt when quantum computers become available.
 
-This example uses:
+=== Java 17 Approach
+
+Since **Java 17 doesn't support PQC algorithms natively in TLS**, this example demonstrates a workaround using:
 
 * **Chimera hybrid certificates**: Combines RSA-2048 + Dilithium3 (ML-DSA-65 / FIPS 204)
 * **X.509 extensions**: Standard extension OIDs (2.5.29.72-74) for alternative signatures
-* **TLS-layer validation**: Custom X509TrustManager validates both signatures during handshake
-* **BouncyCastle 1.78.1**: Provides Dilithium3 post-quantum signature algorithm
+* **Application-level validation**: Custom X509TrustManager validates both RSA and Dilithium3 signatures during TLS handshake
+* **BouncyCastle 1.78.1**: Provides Dilithium3 post-quantum signature algorithm (JCA provider only)
+
+This approach validates PQC signatures at the application level rather than relying on Java's TLS stack. For native PQC TLS support (hybrid cipher suites like X25519Kyber768), use Java 21+ with BouncyCastle JSSE provider.
 
 NOTE: For detailed diagrams and architecture explanation, see link:PQC-EXPLANATION.md[PQC Visual Guide].
 
@@ -35,7 +41,7 @@ Generated files in `target/certs/`:
 
 == Prerequisites
 
-* Java 17 or later
+* **Java 17** (this example demonstrates Java 17-specific workarounds for PQC; for Java 21+, use native PQC TLS support instead)
 * Maven 3.9.9 or later
 * GraalVM (for native mode only)
 
@@ -133,11 +139,13 @@ For native mode testing:
 $ mvn clean verify -Dnative
 ----
 
-== How It Works
+== How It Works (Java 17 Application-Level Validation)
+
+This example works around Java 17's lack of native PQC support by implementing custom certificate validation at the application level, integrated into the TLS handshake via a custom `X509TrustManager`.
 
 === Certificate Structure
 
-Traditional X.509 certificates are extended with three additional fields:
+Traditional X.509 certificates are extended with three additional fields (Chimera format):
 
 * **OID 2.5.29.72** - Alternative public key (Dilithium3)
 * **OID 2.5.29.73** - Alternative signature algorithm identifier
@@ -145,25 +153,27 @@ Traditional X.509 certificates are extended with three additional fields:
 
 Both RSA and Dilithium3 signatures must validate for authentication to succeed.
 
-=== Validation Flow
+=== Validation Flow (Application-Level, Not TLS-Native)
 
 1. Client connects with TLS client certificate
-2. `HybridPqcX509TrustManager` validates certificate during TLS handshake
-3. `CertificatesUtil.validateHybridCertificate()` checks:
-   - RSA signature (standard X.509 validation)
-   - Dilithium3 algorithm OID (2.5.29.73)
-   - Dilithium3 public key (2.5.29.72)
-   - Dilithium3 signature (2.5.29.74)
-4. If all checks pass, connection succeeds
-5. If any check fails, TLS handshake fails
+2. Java's TLS stack invokes our custom `HybridPqcX509TrustManager` during handshake
+3. `CertificatesUtil.validateHybridCertificate()` performs application-level checks:
+   - RSA signature (standard X.509 validation via Java crypto)
+   - Dilithium3 algorithm OID (2.5.29.73) - manual extraction
+   - Dilithium3 public key (2.5.29.72) - manual extraction
+   - Dilithium3 signature (2.5.29.74) - manual verification via BouncyCastle
+4. If all checks pass, TLS handshake continues
+5. If any check fails, TLS handshake is rejected
+
+NOTE: This validation happens at the application level, not within Java's TLS implementation. Java 17's TLS stack only handles the standard RSA certificate; our custom code validates the PQC extensions.
 
 == Important Notes
 
-* **Java 17 Limitation**: This example uses application-level PQC validation because Java 17 doesn't support PQC in TLS natively. For full PQC TLS support (hybrid cipher suites), use Java 21+ with BouncyCastle JSSE provider.
+* **Java 17 Only**: This example is specifically designed for Java 17, which lacks native PQC support in its TLS stack. It demonstrates application-level validation as a workaround. Do not use this approach if you can upgrade to Java 21+.
 
 * **Development Only**: Certificates are regenerated on every startup. For production, use persistent certificates from a trusted CA.
 
-* **BouncyCastle Version**: Uses BouncyCastle 1.78.1 with "Dilithium3" naming. Newer versions (1.79+) use ML-DSA naming from FIPS 204.
+* **BouncyCastle 1.78.1**: Uses "Dilithium3" naming. Newer versions (1.79+) use ML-DSA naming from FIPS 204. This example uses JCA provider only, not JSSE.
 
 == Additional Resources
 
