@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.acme.http.pqc.startup;
+package org.acme.http.pqc.certificates;
 
 import java.io.FileOutputStream;
 import java.math.BigInteger;

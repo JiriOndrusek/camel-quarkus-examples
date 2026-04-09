@@ -210,21 +210,21 @@ When the application starts, you should see keystore generation and PQC provider
 
 [source,text]
 ----
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] BouncyCastle provider registered at position 1 for PQC support
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] BouncyCastle provider confirmed: BC version 1.78
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] ✓ Dilithium3 (ML-DSA-65 / FIPS 204) algorithm available
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] Generating hybrid PQC keystores...
-INFO  [org.acme.http.pqc.startup.HybridCertificateGenerator] ✓ Server hybrid keystore created
-INFO  [org.acme.http.pqc.startup.HybridCertificateGenerator] ✓ Client hybrid keystore created
-INFO  [org.acme.http.pqc.startup.HybridCertificateGenerator] ✓ Client RSA-only keystore created
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] ✓ Hybrid PQC keystores generated successfully
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] BouncyCastle provider registered at position 1 for PQC support
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] BouncyCastle provider confirmed: BC version 1.78
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] ✓ Dilithium3 (ML-DSA-65 / FIPS 204) algorithm available
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] Generating hybrid PQC keystores...
+INFO  [org.acme.http.pqc.certificates.HybridCertificateGenerator] ✓ Server hybrid keystore created
+INFO  [org.acme.http.pqc.certificates.HybridCertificateGenerator] ✓ Client hybrid keystore created
+INFO  [org.acme.http.pqc.certificates.HybridCertificateGenerator] ✓ Client RSA-only keystore created
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] ✓ Hybrid PQC keystores generated successfully
 ----
 
 On subsequent startups:
 
 [source,text]
 ----
-INFO  [org.acme.http.pqc.startup.SecurityConfiguration] Using existing hybrid PQC keystores
+INFO  [org.acme.http.pqc.certificates.SecurityConfiguration] Using existing hybrid PQC keystores
 ----
 
 === 2. Verify Hybrid Certificate Information

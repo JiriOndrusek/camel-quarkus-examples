@@ -22,7 +22,6 @@ import io.quarkus.vertx.http.HttpServerOptionsCustomizer;
 import io.vertx.core.http.HttpServerOptions;
 import io.vertx.core.net.TrustOptions;
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -40,15 +39,12 @@ public class HybridPqcTrustManagerCustomizer implements HttpServerOptionsCustomi
 
     private static final Logger LOG = LoggerFactory.getLogger(HybridPqcTrustManagerCustomizer.class);
 
-    @Inject
-    CertificateValidationService validationService;
-
     @Override
     public void customizeHttpsServer(HttpServerOptions options) {
         LOG.info("Registering custom hybrid PQC TrustManager for TLS-layer validation...");
 
-        // Create custom TrustManager with injected validation service
-        X509TrustManager customTrustManager = new HybridPqcX509TrustManager(validationService);
+        // Create custom TrustManager
+        X509TrustManager customTrustManager = new HybridPqcX509TrustManager();
 
         // Wrap the X509TrustManager into Vert.x TrustOptions
         TrustOptions trustOptions = TrustOptions.wrap(customTrustManager);

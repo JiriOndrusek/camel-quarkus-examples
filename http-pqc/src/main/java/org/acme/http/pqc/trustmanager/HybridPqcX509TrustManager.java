@@ -21,6 +21,8 @@ import java.security.cert.X509Certificate;
 
 import javax.net.ssl.X509TrustManager;
 
+import org.acme.http.pqc.certificates.util.CertificateValidationException;
+import org.acme.http.pqc.certificates.generation.util.CertificatesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,12 +37,6 @@ public class HybridPqcX509TrustManager implements X509TrustManager {
 
     private static final Logger LOG = LoggerFactory.getLogger(HybridPqcX509TrustManager.class);
 
-    private final CertificateValidationService validationService;
-
-    public HybridPqcX509TrustManager(CertificateValidationService validationService) {
-        this.validationService = validationService;
-    }
-
     @Override
     public void checkClientTrusted(X509Certificate[] chain, String authType) throws CertificateException {
         if (chain == null || chain.length == 0) {
@@ -52,7 +48,7 @@ public class HybridPqcX509TrustManager implements X509TrustManager {
 
         try {
             // Validate hybrid certificate - throws CertificateValidationException on failure
-            validationService.validateHybridCertificate(clientCert);
+            CertificatesUtil.validateHybridCertificate(clientCert);
             LOG.debug("Client certificate validated successfully at TLS layer (RSA + Dilithium3)");
         } catch (CertificateValidationException e) {
             LOG.error("Hybrid PQC certificate validation failed: {}", e.getMessage());

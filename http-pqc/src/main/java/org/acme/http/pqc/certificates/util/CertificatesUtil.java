@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.acme.http.pqc.trustmanager;
+package org.acme.http.pqc.certificates.util;
 
 import java.io.IOException;
 import java.security.InvalidKeyException;
@@ -29,7 +29,6 @@ import java.security.cert.X509Certificate;
 import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
-import jakarta.enterprise.context.ApplicationScoped;
 import org.acme.http.pqc.crypto.ChimeraOids;
 import org.bouncycastle.asn1.ASN1BitString;
 import org.bouncycastle.asn1.ASN1OctetString;
@@ -40,13 +39,16 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Service for validating Chimera hybrid certificates.
- * Validates both RSA and Dilithium3 signatures.
+ * Utility class for validating Chimera hybrid certificates.
+ * Validates both RSA and Dilithium3 signatures using static methods.
  */
-@ApplicationScoped
-public class CertificateValidationService {
+public final class CertificatesUtil {
 
-    private static final Logger LOG = LoggerFactory.getLogger(CertificateValidationService.class);
+    private static final Logger LOG = LoggerFactory.getLogger(CertificatesUtil.class);
+
+    private CertificatesUtil() {
+        throw new AssertionError("Utility class cannot be instantiated");
+    }
 
     /**
      * Validates a hybrid certificate by checking both RSA and Dilithium3 signatures.
@@ -54,7 +56,7 @@ public class CertificateValidationService {
      * @param  cert                           The certificate to validate
      * @throws CertificateValidationException if validation fails
      */
-    public void validateHybridCertificate(X509Certificate cert) throws CertificateValidationException {
+    public static void validateHybridCertificate(X509Certificate cert) throws CertificateValidationException {
         LOG.debug("Validating hybrid certificate for subject: {}", cert.getSubjectX500Principal());
 
         try {
@@ -118,7 +120,7 @@ public class CertificateValidationService {
     /**
      * Verifies the RSA signature using standard X.509 verification.
      */
-    private boolean verifyRsaSignature(X509Certificate cert) {
+    private static boolean verifyRsaSignature(X509Certificate cert) {
         try {
             // Self-signed certificate - verify with its own public key
             cert.verify(cert.getPublicKey());
@@ -133,7 +135,7 @@ public class CertificateValidationService {
     /**
      * Extracts the Dilithium3 public key from the altSubjectPublicKeyInfo extension.
      */
-    private PublicKey extractDilithiumPublicKey(X509Certificate cert) {
+    private static PublicKey extractDilithiumPublicKey(X509Certificate cert) {
         try {
             byte[] extensionValue = cert.getExtensionValue(ChimeraOids.SUBJECT_ALT_PUBLIC_KEY_INFO.getId());
             if (extensionValue == null) {
@@ -160,7 +162,7 @@ public class CertificateValidationService {
     /**
      * Extracts the Dilithium3 signature from the altSignatureValue extension.
      */
-    private byte[] extractDilithiumSignature(X509Certificate cert) {
+    private static byte[] extractDilithiumSignature(X509Certificate cert) {
         try {
             byte[] extensionValue = cert.getExtensionValue(ChimeraOids.ALT_SIGNATURE_VALUE.getId());
             if (extensionValue == null) {
@@ -184,7 +186,7 @@ public class CertificateValidationService {
     /**
      * Verifies the Dilithium3 signature.
      */
-    private boolean verifyDilithiumSignature(X509Certificate cert, PublicKey pqcKey, byte[] signature) {
+    private static boolean verifyDilithiumSignature(X509Certificate cert, PublicKey pqcKey, byte[] signature) {
         try {
             Signature dilithiumVerify = Signature.getInstance("Dilithium3", "BC");
             dilithiumVerify.initVerify(pqcKey);
