@@ -24,7 +24,7 @@ NOTE: For detailed diagrams and architecture explanation, see link:PQC-EXPLANATI
 
 Hybrid certificates are automatically generated on every application startup. No manual steps required.
 
-Generated files in `target/classes/keystores/`:
+Generated files in `target/certs/`:
 
 * `server-hybrid-keystore.p12` - Server certificate with RSA + Dilithium3
 * `server-hybrid-truststore.p12` - Truststore for validating clients
@@ -50,28 +50,17 @@ The above command compiles the project, starts the application and lets the Quar
 
 TIP: Please refer to the Development mode section of https://camel.apache.org/camel-quarkus/latest/first-steps.html#_development_mode[Camel Quarkus User guide] for more details.
 
-The application starts on HTTPS port 8443 with two endpoints:
+The application starts on HTTPS port 8443 with mutual TLS (mTLS) enabled. All endpoints require a valid hybrid client certificate with RSA + Dilithium3.
 
-* `/pqc/hybrid` - Returns certificate information (no client cert required)
-* `/pqc/secure` - Requires hybrid client certificate with RSA + Dilithium3
+Main endpoint:
 
-Example:
+* `/pqc/secure` - Requires hybrid client certificate validated at TLS layer
 
-[source,shell]
-----
-$ curl -k https://localhost:8443/pqc/hybrid
-Chimera Hybrid Certificate Information
-======================================
-Format: Chimera (X.509 with alternative key/signature extensions)
-Primary Algorithm: RSA-2048 + SHA256withRSA
-Alternative Algorithm: Dilithium3 (ML-DSA-65 / FIPS 204)
-----
-
-NOTE: The `-k` flag accepts self-signed certificates. In production, use certificates from a trusted CA.
+NOTE: With `client-auth=required`, the TLS handshake rejects connections without valid hybrid PQC certificates before any application code executes.
 
 === Manual Testing with Client Certificates
 
-PEM files are automatically generated during application startup in `target/classes/keystores/`:
+PEM files are automatically generated during application startup in `target/certs/`:
 
 * `client-hybrid-keystore-cert.pem` - Hybrid certificate (RSA + Dilithium3)
 * `client-hybrid-keystore-key.pem` - Private key for hybrid certificate
@@ -80,8 +69,8 @@ Test with hybrid certificate (should succeed):
 
 [source,shell]
 ----
-$ curl --cert target/classes/keystores/client-hybrid-keystore-cert.pem \
-       --key target/classes/keystores/client-hybrid-keystore-key.pem \
+$ curl --cert target/certs/client-hybrid-keystore-cert.pem \
+       --key target/certs/client-hybrid-keystore-key.pem \
        -k \
        https://localhost:8443/pqc/secure
 
@@ -89,40 +78,6 @@ $ curl --cert target/classes/keystores/client-hybrid-keystore-cert.pem \
 Your connection is quantum-safe.
 Both RSA and Dilithium3 signatures were validated during TLS handshake.
 ----
-
-Test with RSA-only certificate (should fail with TLS alert):
-
-[source,shell]
-----
-# First extract RSA-only certificate (not auto-generated)
-$ openssl pkcs12 -in target/classes/keystores/client-rsa-only-keystore.p12 \
-    -passin pass:changeit \
-    -out /tmp/client-rsa-cert.pem \
-    -clcerts -nokeys \
-    -legacy
-
-$ openssl pkcs12 -in target/classes/keystores/client-rsa-only-keystore.p12 \
-    -passin pass:changeit \
-    -out /tmp/client-rsa-key.pem \
-    -nocerts -nodes \
-    -legacy
-
-# Try to connect (will fail)
-$ curl --cert /tmp/client-rsa-cert.pem \
-       --key /tmp/client-rsa-key.pem \
-       -k \
-       https://localhost:8443/pqc/secure
-
-curl: (56) OpenSSL SSL_read: error:0A000416:SSL routines::ssl/tls alert certificate unknown
-----
-
-NOTE: The `-legacy` flag is required for RSA-only extraction because BouncyCastle uses RC2-40-CBC encryption. The hybrid PEM files don't require manual extraction - they're auto-generated.
-
-The RSA-only certificate is rejected because it lacks the required PQC extensions (OID 2.5.29.73 - algorithm identifier).
-
-Health check:
-
-* https://localhost:8443/q/health
 
 == Package and Run the Application
 
@@ -175,7 +130,7 @@ For native mode testing:
 
 [source,shell]
 ----
-$ mvn clean test -Dnative
+$ mvn clean verify -Dnative
 ----
 
 == How It Works

@@ -37,44 +37,19 @@ public class HttpPqcTest {
     }
 
     @Test
-    public void testPqcHybridEndpoint() {
-        // Note: With client-auth=required, ALL endpoints require client certificates
-        // The /pqc/hybrid endpoint provides certificate info but still requires TLS auth
-        // Testing without certificate to verify TLS-layer enforcement
-        try {
-            RestAssured.given()
-                    .when()
-                    .get("https://localhost:8443/pqc/anything_does_not_matter")
-                    .then()
-                    .statusCode(200);
-
-            // If we reach here, test should fail (expected SSL exception)
-            assert false : "Expected SSL exception but connection succeeded";
-        } catch (Exception e) {
-            // Expected: SSL handshake failure (certificate_required)
-            System.out.println("✓ Expected SSL exception for /pqc/hybrid without cert: " + e.getMessage());
-            assertTrue(e.getMessage().contains("certificate_required") ||
-                    e.getMessage().contains("Received fatal alert"),
-                    "Expected certificate_required SSL error, got: " + e.getMessage());
-        }
-    }
-
-    @Test
     public void testPqcSecureEndpointWithoutClientCert() {
-        // Test /pqc/secure without client certificate
         // With client-auth=required, TLS handshake fails before reaching the route
         try {
             RestAssured.given()
                     .when()
                     .get("https://localhost:8443/pqc/secure")
                     .then()
-                    .statusCode(200); // Should not reach here
+                    .statusCode(200);
 
-            // If no exception, test should fail
-            assert false : "Expected SSL exception but connection succeeded";
+            fail("Expected SSL exception but connection succeeded");
         } catch (Exception e) {
-            // Expected: SSL/TLS handshake failure (certificate_required)
-            System.out.println("✓ Expected SSL exception: " + e.getMessage());
+            // Expected: SSL handshake failure (certificate_required)
+            System.out.println("✓ Expected SSL exception without client cert: " + e.getMessage());
             assertTrue(e.getMessage().contains("certificate_required") ||
                     e.getMessage().contains("Received fatal alert"),
                     "Expected certificate_required SSL error, got: " + e.getMessage());
@@ -90,8 +65,8 @@ public class HttpPqcTest {
         RestAssured.given()
                 .config(RestAssuredConfig.config().sslConfig(
                         SSLConfig.sslConfig()
-                                .keyStore("target/classes/keystores/client-hybrid-keystore.p12", "changeit")
-                                .trustStore("target/classes/keystores/server-hybrid-truststore.p12", "changeit")
+                                .keyStore("target/certs/client-hybrid-keystore.p12", "changeit")
+                                .trustStore("target/certs/server-hybrid-truststore.p12", "changeit")
                                 .allowAllHostnames() // Accept localhost with self-signed cert
                 ))
                 .when()
@@ -111,8 +86,8 @@ public class HttpPqcTest {
             RestAssured.given()
                     .config(RestAssuredConfig.config().sslConfig(
                             SSLConfig.sslConfig()
-                                    .keyStore("target/classes/keystores/client-rsa-only-keystore.p12", "changeit")
-                                    .trustStore("target/classes/keystores/server-hybrid-truststore.p12", "changeit")
+                                    .keyStore("target/certs/client-rsa-only-keystore.p12", "changeit")
+                                    .trustStore("target/certs/server-hybrid-truststore.p12", "changeit")
                                     .allowAllHostnames()))
                     .when()
                     .get("https://localhost:8443/pqc/secure")

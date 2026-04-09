@@ -60,7 +60,7 @@ public class HybridCertificateGenerator {
 
     // Demo keystore password - DO NOT use in production
     private static final String KEYSTORE_PASSWORD = "changeit";
-    private static final String KEYSTORES_DIR = "target/classes/keystores";
+    private static final String KEYSTORES_DIR = "target/certs";
 
     /**
      * Certificate data holder for keypairs and certificates.
