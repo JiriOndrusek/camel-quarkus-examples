@@ -16,7 +16,6 @@
  */
 package org.acme.http.pqc.startup;
 
-import java.security.Provider;
 import java.security.Security;
 
 import io.quarkus.runtime.StartupEvent;
@@ -36,27 +35,17 @@ public class SecurityConfiguration {
         Security.insertProviderAt(new BouncyCastleProvider(), 1);
         LOG.info("BouncyCastle provider registered at position 1 for PQC support");
 
-        // Verify BouncyCastle is properly registered
-        Provider bcProvider = Security.getProvider(BouncyCastleProvider.PROVIDER_NAME);
-        if (bcProvider != null) {
-            LOG.info("BouncyCastle provider confirmed: {} version {}",
-                    bcProvider.getName(), bcProvider.getVersion());
-        } else {
-            LOG.error("BouncyCastle provider not found!");
-            throw new RuntimeException("BouncyCastle provider registration failed");
-        }
-
-        // Generate hybrid PQC keystores if they don't exist
-        generateKeystoresIfNeeded();
+        // Generate fresh hybrid PQC keystores on every startup
+        generateKeystores();
     }
 
-    private void generateKeystoresIfNeeded() {
+    private void generateKeystores() {
         try {
-            LOG.info("Generating hybrid PQC keystores...");
+            LOG.info("Generating fresh hybrid PQC keystores...");
             HybridCertificateGenerator.generateServerKeystore();
             HybridCertificateGenerator.generateClientHybridKeystore();
             HybridCertificateGenerator.generateClientRsaOnlyKeystore();
-            LOG.info("✓ Hybrid PQC keystores generated successfully");
+            LOG.info("Hybrid PQC keystores generated successfully");
         } catch (Exception e) {
             LOG.error("Failed to generate hybrid PQC keystores", e);
             throw new RuntimeException("Keystore generation failed", e);

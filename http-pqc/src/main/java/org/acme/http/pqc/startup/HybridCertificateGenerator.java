@@ -29,7 +29,7 @@ import java.security.Signature;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
+import org.acme.http.pqc.crypto.ChimeraOids;
 import org.bouncycastle.asn1.DERBitString;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
@@ -47,17 +47,16 @@ import org.slf4j.LoggerFactory;
  * Utility class for generating and persisting Chimera hybrid certificates.
  * These certificates combine classical RSA with post-quantum Dilithium3 signatures
  * using X.509 extensions as specified in the BouncyCastle PQC Almanac.
+ *
+ * <p>
+ * Certificates are automatically generated at application startup by
+ * {@link SecurityConfiguration} if they don't already exist.
  */
 public class HybridCertificateGenerator {
 
     private static final Logger LOG = LoggerFactory.getLogger(HybridCertificateGenerator.class);
 
-    // Extension OIDs for Chimera format (from X.509 standards)
-    private static final ASN1ObjectIdentifier OID_SUBJECT_ALT_PUBLIC_KEY_INFO = new ASN1ObjectIdentifier(
-            "2.5.29.72");
-    private static final ASN1ObjectIdentifier OID_ALT_SIGNATURE_ALGORITHM = new ASN1ObjectIdentifier("2.5.29.73");
-    private static final ASN1ObjectIdentifier OID_ALT_SIGNATURE_VALUE = new ASN1ObjectIdentifier("2.5.29.74");
-
+    // Demo keystore password - DO NOT use in production
     private static final String KEYSTORE_PASSWORD = "changeit";
     private static final String KEYSTORES_DIR = "target/classes/keystores";
 
@@ -85,7 +84,7 @@ public class HybridCertificateGenerator {
      */
     public static CertificateData generateChimeraCertificate(String commonName, boolean includeAltSignature)
             throws Exception {
-        LOG.info("Generating Chimera hybrid certificate for CN={}, includeAltSignature={}",
+        LOG.debug("Generating Chimera hybrid certificate for CN={}, includeAltSignature={}",
                 commonName, includeAltSignature);
 
         // Generate RSA keypair (classical algorithm)
@@ -116,21 +115,20 @@ public class HybridCertificateGenerator {
             // Add Dilithium3 alternative public key (Chimera extension)
             SubjectPublicKeyInfo dilithiumPubKeyInfo = SubjectPublicKeyInfo
                     .getInstance(dilithiumKeyPair.getPublic().getEncoded());
-            certBuilder.addExtension(OID_SUBJECT_ALT_PUBLIC_KEY_INFO, false, dilithiumPubKeyInfo);
+            certBuilder.addExtension(ChimeraOids.SUBJECT_ALT_PUBLIC_KEY_INFO, false, dilithiumPubKeyInfo);
 
             // Add alternative signature algorithm (Chimera extension)
-            AlgorithmIdentifier dilithiumSigAlg = new AlgorithmIdentifier(
-                    new ASN1ObjectIdentifier("1.3.6.1.4.1.2.267.7.6.5")); // Dilithium3 OID
-            certBuilder.addExtension(OID_ALT_SIGNATURE_ALGORITHM, false, dilithiumSigAlg);
+            AlgorithmIdentifier dilithiumSigAlg = new AlgorithmIdentifier(ChimeraOids.DILITHIUM3);
+            certBuilder.addExtension(ChimeraOids.ALT_SIGNATURE_ALGORITHM, false, dilithiumSigAlg);
 
             // Generate Dilithium3 alternative signature (Chimera extension)
             Signature dilithiumSig = Signature.getInstance("Dilithium3", "BC");
             dilithiumSig.initSign(dilithiumKeyPair.getPrivate());
             dilithiumSig.update(subject.getEncoded()); // Sign subject DN as per Chimera spec
             byte[] dilithiumSignature = dilithiumSig.sign();
-            certBuilder.addExtension(OID_ALT_SIGNATURE_VALUE, false, new DERBitString(dilithiumSignature));
+            certBuilder.addExtension(ChimeraOids.ALT_SIGNATURE_VALUE, false, new DERBitString(dilithiumSignature));
 
-            LOG.info("✓ Dilithium3 extensions added to certificate");
+            LOG.debug("Dilithium3 extensions added to certificate");
         }
 
         // Sign with RSA (primary signature)
@@ -142,85 +140,75 @@ public class HybridCertificateGenerator {
                 .setProvider("BC")
                 .getCertificate(certHolder);
 
-        LOG.info("✓ Chimera certificate generated successfully for CN={}", commonName);
+        LOG.debug("Chimera certificate generated successfully for CN={}", commonName);
 
         return new CertificateData(rsaKeyPair, dilithiumKeyPair, certificate);
+    }
+
+    /**
+     * Generates a keystore with the specified certificate type.
+     *
+     * @param commonName          The CN for the certificate
+     * @param includeAltSignature Whether to include Dilithium3 extensions
+     * @param keystorePath        Path where keystore will be saved
+     * @param alias               Keystore entry alias
+     * @param includeTruststore   Whether to also create a truststore
+     */
+    private static void generateKeystore(
+            String commonName,
+            boolean includeAltSignature,
+            String keystorePath,
+            String alias,
+            boolean includeTruststore) throws Exception {
+
+        CertificateData certData = generateChimeraCertificate(commonName, includeAltSignature);
+
+        KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
+        keyStore.load(null, null);
+        keyStore.setKeyEntry(alias,
+                certData.rsaKeyPair.getPrivate(),
+                KEYSTORE_PASSWORD.toCharArray(),
+                new X509Certificate[] { certData.certificate });
+
+        saveKeyStore(keyStore, keystorePath, KEYSTORE_PASSWORD);
+        LOG.info("Keystore created: {}", keystorePath);
+
+        if (includeTruststore) {
+            String trustPath = keystorePath.replace("-keystore.p12", "-truststore.p12");
+            KeyStore trustStore = KeyStore.getInstance("PKCS12", "BC");
+            trustStore.load(null, null);
+            trustStore.setCertificateEntry(alias + "-ca", certData.certificate);
+            saveKeyStore(trustStore, trustPath, KEYSTORE_PASSWORD);
+            LOG.info("Truststore created: {}", trustPath);
+        }
     }
 
     /**
      * Generates server hybrid keystore with RSA + Dilithium3 certificate.
      */
     public static void generateServerKeystore() throws Exception {
-        LOG.info("Generating server hybrid keystore...");
-
-        CertificateData serverCert = generateChimeraCertificate("localhost", true);
-
-        KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
-        keyStore.load(null, null);
-        keyStore.setKeyEntry("server",
-                serverCert.rsaKeyPair.getPrivate(),
-                KEYSTORE_PASSWORD.toCharArray(),
-                new X509Certificate[] { serverCert.certificate });
-
-        String path = KEYSTORES_DIR + "/server-hybrid-keystore.p12";
-        saveKeyStore(keyStore, path, KEYSTORE_PASSWORD);
-
-        // Also create server truststore (for validating client certificates)
-        KeyStore trustStore = KeyStore.getInstance("PKCS12", "BC");
-        trustStore.load(null, null);
-        trustStore.setCertificateEntry("server-ca", serverCert.certificate);
-
-        String trustPath = KEYSTORES_DIR + "/server-hybrid-truststore.p12";
-        saveKeyStore(trustStore, trustPath, KEYSTORE_PASSWORD);
-
-        LOG.info("✓ Server hybrid keystore created: {}", path);
-        LOG.info("✓ Server hybrid truststore created: {}", trustPath);
+        generateKeystore("localhost", true, KEYSTORES_DIR + "/server-hybrid-keystore.p12",
+                "server", true);
     }
 
     /**
      * Generates client hybrid keystore with RSA + Dilithium3 certificate.
      */
     public static void generateClientHybridKeystore() throws Exception {
-        LOG.info("Generating client hybrid keystore...");
-
-        CertificateData clientCert = generateChimeraCertificate("client-hybrid", true);
-
-        KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
-        keyStore.load(null, null);
-        keyStore.setKeyEntry("client",
-                clientCert.rsaKeyPair.getPrivate(),
-                KEYSTORE_PASSWORD.toCharArray(),
-                new X509Certificate[] { clientCert.certificate });
-
-        String path = KEYSTORES_DIR + "/client-hybrid-keystore.p12";
-        saveKeyStore(keyStore, path, KEYSTORE_PASSWORD);
-
-        LOG.info("✓ Client hybrid keystore created: {}", path);
+        generateKeystore("client-hybrid", true, KEYSTORES_DIR + "/client-hybrid-keystore.p12",
+                "client", false);
     }
 
     /**
      * Generates client RSA-only keystore (no PQC extensions - for failure test).
      */
     public static void generateClientRsaOnlyKeystore() throws Exception {
-        LOG.info("Generating client RSA-only keystore...");
-
-        CertificateData clientCert = generateChimeraCertificate("client-rsa-only", false);
-
-        KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
-        keyStore.load(null, null);
-        keyStore.setKeyEntry("client",
-                clientCert.rsaKeyPair.getPrivate(),
-                KEYSTORE_PASSWORD.toCharArray(),
-                new X509Certificate[] { clientCert.certificate });
-
-        String path = KEYSTORES_DIR + "/client-rsa-only-keystore.p12";
-        saveKeyStore(keyStore, path, KEYSTORE_PASSWORD);
-
-        LOG.info("✓ Client RSA-only keystore created: {}", path);
+        generateKeystore("client-rsa-only", false, KEYSTORES_DIR + "/client-rsa-only-keystore.p12",
+                "client", false);
     }
 
     /**
-     * Saves a KeyStore to disk.
+     * Saves a KeyStore to disk, overwriting any existing file.
      */
     public static void saveKeyStore(KeyStore keyStore, String path, String password) throws Exception {
         Path dirPath = Paths.get(path).getParent();
@@ -232,12 +220,5 @@ public class HybridCertificateGenerator {
         try (FileOutputStream fos = new FileOutputStream(path)) {
             keyStore.store(fos, password.toCharArray());
         }
-    }
-
-    /**
-     * Checks if a keystore file exists at the given path.
-     */
-    public static boolean keystoreExists(String path) {
-        return Files.exists(Paths.get(path));
     }
 }

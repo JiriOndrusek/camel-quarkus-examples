@@ -48,35 +48,34 @@ public class HybridPqcX509TrustManager implements X509TrustManager {
         }
 
         X509Certificate clientCert = chain[0];
-        LOG.info("Validating client certificate at TLS layer: {}", clientCert.getSubjectX500Principal());
+        LOG.debug("Validating client certificate at TLS layer: {}", clientCert.getSubjectX500Principal());
 
-        // Validate hybrid certificate using existing service
-        ValidationResult result = validationService.validateHybridCertificate(clientCert);
-
-        if (!result.isOverallValid()) {
-            String errorMsg = String.format(
-                    "Hybrid PQC certificate validation failed: RSA=%s, Dilithium3=%s - %s",
-                    result.isRsaValid() ? "VALID" : "INVALID",
-                    result.isDilithiumValid() ? "VALID" : "INVALID",
-                    result.getMessage());
-            LOG.error(errorMsg);
-            throw new CertificateException(errorMsg);
+        try {
+            // Validate hybrid certificate - throws CertificateValidationException on failure
+            validationService.validateHybridCertificate(clientCert);
+            LOG.debug("Client certificate validated successfully at TLS layer (RSA + Dilithium3)");
+        } catch (CertificateValidationException e) {
+            LOG.error("Hybrid PQC certificate validation failed: {}", e.getMessage());
+            throw new CertificateException("Validation failed: " + e.getMessage(), e);
         }
-
-        LOG.info("✓ Client certificate validated successfully at TLS layer (RSA + Dilithium3)");
     }
 
     @Override
     public void checkServerTrusted(X509Certificate[] chain, String authType) throws CertificateException {
-        // For server-to-server TLS validation (not needed for this example)
-        // Could implement similar hybrid validation for server certificates
-        LOG.debug("Server certificate validation not implemented (client-side validation only)");
+        // Not implemented - this example only validates client certificates
+        // (server-to-client authentication, not client-to-server)
+        //
+        // In mutual TLS where client validates server's hybrid certificate,
+        // this method would implement similar validation logic.
+        LOG.debug("Server certificate validation not implemented (client-auth only)");
     }
 
     @Override
     public X509Certificate[] getAcceptedIssuers() {
-        // Return empty array for self-signed certificates in demo
-        // In production, return trusted CA certificates
+        // Return empty array for self-signed certificates in this demo.
+        //
+        // In production with a CA hierarchy, this would return the
+        // list of trusted CA certificates that can issue client certificates.
         return new X509Certificate[0];
     }
 }

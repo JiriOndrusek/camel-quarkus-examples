@@ -16,37 +16,18 @@
  */
 package org.acme.http.pqc.trustmanager;
 
+import java.security.cert.CertificateException;
+
 /**
- * Result of hybrid certificate validation.
- * Both RSA and Dilithium3 signatures must be valid for overall validation to succeed.
+ * Exception thrown when hybrid PQC certificate validation fails.
  */
-public class ValidationResult {
-    private final boolean rsaValid;
-    private final boolean dilithiumValid;
-    private final String message;
+public class CertificateValidationException extends CertificateException {
 
-    public ValidationResult(boolean rsaValid, boolean dilithiumValid, String message) {
-        this.rsaValid = rsaValid;
-        this.dilithiumValid = dilithiumValid;
-        this.message = message;
+    public CertificateValidationException(String message) {
+        super(message);
     }
 
-    public boolean isRsaValid() {
-        return rsaValid;
-    }
-
-    public boolean isDilithiumValid() {
-        return dilithiumValid;
-    }
-
-    /**
-     * Both RSA and Dilithium3 signatures must be valid.
-     */
-    public boolean isOverallValid() {
-        return rsaValid && dilithiumValid;
-    }
-
-    public String getMessage() {
-        return message;
+    public CertificateValidationException(String message, Throwable cause) {
+        super(message, cause);
     }
 }

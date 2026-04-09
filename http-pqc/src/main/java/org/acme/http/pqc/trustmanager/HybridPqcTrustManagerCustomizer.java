@@ -56,7 +56,7 @@ public class HybridPqcTrustManagerCustomizer implements HttpServerOptionsCustomi
         // Register with Vert.x HTTP server using setTrustOptions
         options.setTrustOptions(trustOptions);
 
-        LOG.info("✓ Custom hybrid PQC TrustManager registered successfully");
+        LOG.info("Custom hybrid PQC TrustManager registered successfully");
         LOG.info("  Client certificates will be validated at TLS layer (RSA + Dilithium3)");
     }
 }

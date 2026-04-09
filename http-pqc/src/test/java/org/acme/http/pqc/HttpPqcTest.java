@@ -25,6 +25,7 @@ import org.junit.jupiter.api.Test;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.fail;
 
 @QuarkusTest
 public class HttpPqcTest {
@@ -102,5 +103,31 @@ public class HttpPqcTest {
                 .body(containsString("TLS layer"));
     }
 
-    //    add negative test
+    @Test
+    public void testPqcSecureEndpointWithRsaOnlyCertificate() {
+        // Test /pqc/secure WITH RSA-only client certificate (no PQC extensions)
+        // TLS handshake should FAIL because custom TrustManager requires hybrid cert
+        try {
+            RestAssured.given()
+                    .config(RestAssuredConfig.config().sslConfig(
+                            SSLConfig.sslConfig()
+                                    .keyStore("target/classes/keystores/client-rsa-only-keystore.p12", "changeit")
+                                    .trustStore("target/classes/keystores/server-hybrid-truststore.p12", "changeit")
+                                    .allowAllHostnames()))
+                    .when()
+                    .get("https://localhost:8443/pqc/secure")
+                    .then()
+                    .statusCode(200); // Should NOT reach here
+
+            fail("Expected SSL exception for RSA-only certificate, but connection succeeded");
+        } catch (Exception e) {
+            // Expected: TLS handshake failure due to missing PQC extensions
+            System.out.println("✓ Expected SSL exception for RSA-only cert: " + e.getMessage());
+            assertTrue(
+                    e.getMessage().contains("certificate") ||
+                            e.getMessage().contains("handshake") ||
+                            e.getMessage().contains("alert"),
+                    "Expected certificate validation error, got: " + e.getMessage());
+        }
+    }
 }

@@ -16,17 +16,25 @@
  */
 package org.acme.http.pqc.trustmanager;
 
+import java.io.IOException;
+import java.security.InvalidKeyException;
 import java.security.KeyFactory;
+import java.security.NoSuchAlgorithmException;
+import java.security.NoSuchProviderException;
 import java.security.PublicKey;
 import java.security.Signature;
+import java.security.SignatureException;
+import java.security.cert.CertificateException;
 import java.security.cert.X509Certificate;
+import java.security.spec.InvalidKeySpecException;
 import java.security.spec.X509EncodedKeySpec;
 
 import jakarta.enterprise.context.ApplicationScoped;
+import org.acme.http.pqc.crypto.ChimeraOids;
 import org.bouncycastle.asn1.ASN1BitString;
-import org.bouncycastle.asn1.ASN1ObjectIdentifier;
 import org.bouncycastle.asn1.ASN1OctetString;
 import org.bouncycastle.asn1.ASN1Primitive;
+import org.bouncycastle.asn1.x509.AlgorithmIdentifier;
 import org.bouncycastle.asn1.x509.SubjectPublicKeyInfo;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -40,69 +48,70 @@ public class CertificateValidationService {
 
     private static final Logger LOG = LoggerFactory.getLogger(CertificateValidationService.class);
 
-    // Extension OIDs for Chimera format
-    private static final ASN1ObjectIdentifier OID_SUBJECT_ALT_PUBLIC_KEY_INFO = new ASN1ObjectIdentifier(
-            "2.5.29.72");
-    private static final ASN1ObjectIdentifier OID_ALT_SIGNATURE_VALUE = new ASN1ObjectIdentifier("2.5.29.74");
-
     /**
      * Validates a hybrid certificate by checking both RSA and Dilithium3 signatures.
      *
-     * @param  cert The certificate to validate
-     * @return      ValidationResult with details of RSA and Dilithium3 validation
+     * @param  cert                           The certificate to validate
+     * @throws CertificateValidationException if validation fails
      */
-    public ValidationResult validateHybridCertificate(X509Certificate cert) {
-        LOG.info("Validating hybrid certificate for subject: {}", cert.getSubjectX500Principal());
-
-        boolean rsaValid = false;
-        boolean dilithiumValid = false;
-        String message;
+    public void validateHybridCertificate(X509Certificate cert) throws CertificateValidationException {
+        LOG.debug("Validating hybrid certificate for subject: {}", cert.getSubjectX500Principal());
 
         try {
             // Verify RSA signature (standard X.509 verification)
-            rsaValid = verifyRsaSignature(cert);
-
-            if (!rsaValid) {
-                message = "RSA signature validation failed";
-                LOG.warn(message);
-                return new ValidationResult(false, false, message);
+            if (!verifyRsaSignature(cert)) {
+                throw new CertificateValidationException("RSA signature validation failed");
             }
 
-            LOG.info("✓ RSA signature verified");
+            LOG.debug("RSA signature verified");
+
+            // Verify alternative signature algorithm extension exists
+            byte[] altSigAlgExt = cert.getExtensionValue(ChimeraOids.ALT_SIGNATURE_ALGORITHM.getId());
+            if (altSigAlgExt == null) {
+                throw new CertificateValidationException(
+                        "PQC signature algorithm extension missing (OID 2.5.29.73)");
+            }
+
+            // Validate it's Dilithium3
+            ASN1Primitive primitive = ASN1Primitive.fromByteArray(altSigAlgExt);
+            byte[] octets = ((ASN1OctetString) primitive).getOctets();
+            AlgorithmIdentifier algId = AlgorithmIdentifier.getInstance(octets);
+
+            if (!ChimeraOids.DILITHIUM3.equals(algId.getAlgorithm())) {
+                throw new CertificateValidationException(
+                        "Expected Dilithium3 algorithm OID, found: " + algId.getAlgorithm());
+            }
+
+            LOG.debug("Dilithium3 algorithm OID validated");
 
             // Extract and verify Dilithium3 signature
             PublicKey dilithiumPublicKey = extractDilithiumPublicKey(cert);
             if (dilithiumPublicKey == null) {
-                message = "PQC public key extension missing (OID 2.5.29.72)";
-                LOG.warn(message);
-                return new ValidationResult(true, false, message);
+                throw new CertificateValidationException(
+                        "PQC public key extension missing (OID 2.5.29.72)");
             }
 
             byte[] dilithiumSignature = extractDilithiumSignature(cert);
             if (dilithiumSignature == null) {
-                message = "PQC signature extension missing (OID 2.5.29.74)";
-                LOG.warn(message);
-                return new ValidationResult(true, false, message);
+                throw new CertificateValidationException(
+                        "PQC signature extension missing (OID 2.5.29.74)");
             }
 
-            dilithiumValid = verifyDilithiumSignature(cert, dilithiumPublicKey, dilithiumSignature);
-
-            if (!dilithiumValid) {
-                message = "Dilithium3 signature validation failed";
-                LOG.warn(message);
-                return new ValidationResult(true, false, message);
+            if (!verifyDilithiumSignature(cert, dilithiumPublicKey, dilithiumSignature)) {
+                throw new CertificateValidationException("Dilithium3 signature validation failed");
             }
 
-            LOG.info("✓ Dilithium3 signature verified");
+            LOG.debug("Dilithium3 signature verified - hybrid certificate valid");
 
-            message = "Both RSA and Dilithium3 signatures validated successfully";
-            LOG.info(message);
-            return new ValidationResult(true, true, message);
-
+        } catch (IOException e) {
+            throw new CertificateValidationException("Failed to parse PQC extensions", e);
+        } catch (CertificateValidationException e) {
+            LOG.warn("Certificate validation failed: {}", e.getMessage());
+            throw e;
         } catch (Exception e) {
-            message = "Certificate validation error: " + e.getMessage();
+            String message = "Unexpected error during certificate validation: " + e.getMessage();
             LOG.error(message, e);
-            return new ValidationResult(rsaValid, false, message);
+            throw new CertificateValidationException(message, e);
         }
     }
 
@@ -114,7 +123,8 @@ public class CertificateValidationService {
             // Self-signed certificate - verify with its own public key
             cert.verify(cert.getPublicKey());
             return true;
-        } catch (Exception e) {
+        } catch (CertificateException | NoSuchAlgorithmException | InvalidKeyException | SignatureException
+                | NoSuchProviderException e) {
             LOG.error("RSA signature verification failed", e);
             return false;
         }
@@ -125,7 +135,7 @@ public class CertificateValidationService {
      */
     private PublicKey extractDilithiumPublicKey(X509Certificate cert) {
         try {
-            byte[] extensionValue = cert.getExtensionValue(OID_SUBJECT_ALT_PUBLIC_KEY_INFO.getId());
+            byte[] extensionValue = cert.getExtensionValue(ChimeraOids.SUBJECT_ALT_PUBLIC_KEY_INFO.getId());
             if (extensionValue == null) {
                 return null;
             }
@@ -141,7 +151,7 @@ public class CertificateValidationService {
             KeyFactory keyFactory = KeyFactory.getInstance("Dilithium3", "BC");
             return keyFactory.generatePublic(new X509EncodedKeySpec(spki.getEncoded()));
 
-        } catch (Exception e) {
+        } catch (IOException | NoSuchAlgorithmException | InvalidKeySpecException | NoSuchProviderException e) {
             LOG.error("Failed to extract Dilithium3 public key", e);
             return null;
         }
@@ -152,7 +162,7 @@ public class CertificateValidationService {
      */
     private byte[] extractDilithiumSignature(X509Certificate cert) {
         try {
-            byte[] extensionValue = cert.getExtensionValue(OID_ALT_SIGNATURE_VALUE.getId());
+            byte[] extensionValue = cert.getExtensionValue(ChimeraOids.ALT_SIGNATURE_VALUE.getId());
             if (extensionValue == null) {
                 return null;
             }
@@ -165,7 +175,7 @@ public class CertificateValidationService {
             ASN1BitString bitString = ASN1BitString.getInstance(octets);
             return bitString.getBytes();
 
-        } catch (Exception e) {
+        } catch (IOException e) {
             LOG.error("Failed to extract Dilithium3 signature", e);
             return null;
         }
@@ -180,7 +190,7 @@ public class CertificateValidationService {
             dilithiumVerify.initVerify(pqcKey);
             dilithiumVerify.update(cert.getSubjectX500Principal().getEncoded());
             return dilithiumVerify.verify(signature);
-        } catch (Exception e) {
+        } catch (NoSuchAlgorithmException | InvalidKeyException | SignatureException | NoSuchProviderException e) {
             LOG.error("Dilithium3 signature verification failed", e);
             return false;
         }

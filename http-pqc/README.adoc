@@ -78,14 +78,14 @@ This example provides value by showing how to:
 
 == Certificate Generation
 
-This example automatically generates Chimera hybrid certificates at application startup. These keystores are created in `src/main/resources/keystores/` (excluded from git):
+Fresh certificates are automatically generated on every application startup by the `SecurityConfiguration` class. These keystores are created in `target/classes/keystores/`:
 
 * `server-hybrid-keystore.p12`: Server certificate with RSA + Dilithium3 signatures
 * `server-hybrid-truststore.p12`: Truststore for validating client certificates
 * `client-hybrid-keystore.p12`: Client certificate with RSA + Dilithium3 (for successful auth test)
 * `client-rsa-only-keystore.p12`: Client certificate with only RSA (for failure test)
 
-The keystores are generated once on first startup and reused on subsequent runs. To regenerate them, delete the files and restart the application.
+NOTE: Keystores are regenerated on every startup with new cryptographic material. This ensures fresh certificates for development and testing.
 
 **Chimera Hybrid Certificate Format:**
 
@@ -332,12 +332,25 @@ src/main/resources/keystores/*.p12
 This ensures:
 * Fresh keystores per environment (dev, test, prod)
 * No sensitive key material in repository
-* Automatic generation on first startup
+* Automatic generation on first startup or via script
+
+**Certificate Generation Script:**
+
+The `generate-certs.sh` script provides a convenient way to generate certificates similar to the reference implementation at https://github.com/oscerd/camel-pqc-tls/blob/main/pqc-ssl-context/generate-certs.sh.
+
+Key differences from traditional keytool-based scripts:
+
+* Uses BouncyCastle to support PQC algorithms (keytool doesn't support Dilithium3)
+* Generates Chimera hybrid certificates with both RSA and PQC signatures
+* Invokes the `HybridCertificateGenerator` main method via Maven exec plugin
+* Can be integrated into build/deployment pipelines
 
 To regenerate keystores:
 ```bash
-rm -rf src/main/resources/keystores/*.p12
-mvn quarkus:dev
+rm -rf target/classes/keystores/*.p12
+./generate-certs.sh
+# Or use Maven directly
+mvn quarkus:dev  # Auto-generates on startup
 ```
 
 === Native Mode Considerations
