@@ -22,7 +22,7 @@ import java.security.cert.X509Certificate;
 import javax.net.ssl.X509TrustManager;
 
 import org.acme.http.pqc.certificates.util.CertificateValidationException;
-import org.acme.http.pqc.certificates.generation.util.CertificatesUtil;
+import org.acme.http.pqc.certificates.util.CertificatesUtil;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

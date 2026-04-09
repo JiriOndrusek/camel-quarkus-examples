@@ -53,7 +53,7 @@
        │     │ - Public Key: RSA-2048  │               │
        │     │ - Signature: SHA256+RSA │               │
        │<────│ - Subject: localhost    │───────────────│
-       │     │ ⚠️ QUANTUM VULNERABLE    │               │
+       │     │ ⚠️ QUANTUM VULNERABLE   │               │
        │     └─────────────────────────┘               │
        │                                               │
        │  3. Verify RSA signature ✓                    │
@@ -82,14 +82,14 @@ Because Java 17 doesn't support PQC in TLS, we demonstrate PQC **inside** the ap
 │   (curl)     │                                │  (Quarkus)   │
 └──────┬───────┘                                └──────┬───────┘
        │                                               │
-       │  LAYER 1: HTTPS (Still uses RSA - Java 17)   │
+       │  LAYER 1: HTTPS (Still uses RSA - Java 17)    │
        │  ════════════════════════════════════════     │
        │  1. TLS Handshake with RSA certificate        │
        ├──────────────────────────────────────────────>│
        │     ┌─────────────────────────┐               │
        │     │ TLS Certificate:        │               │
        │     │ - RSA-2048 (classical)  │               │
-       │<────│ ⚠️ Quantum vulnerable    │───────────────│
+       │<────│ ⚠️ Quantum vulnerable   │───────────────│
        │     └─────────────────────────┘               │
        │                                               │
        │  2. Encrypted tunnel established              │
@@ -100,14 +100,14 @@ Because Java 17 doesn't support PQC in TLS, we demonstrate PQC **inside** the ap
        │  3. GET /pqc/sign                             │
        ├──────────────────────────────────────────────>│
        │                                               │
-       │                                    ┌──────────┴────────┐
-       │                                    │ PqcSignatureService│
+       │                                    ┌──────────┴───────────┐
+       │                                    │ PqcSignatureService  │
        │                                    │ - Generate Dilithium3│
-       │                                    │   keypair          │
-       │                                    │ - Sign message     │
-       │                                    │ - Verify signature │
-       │                                    │ ✓ QUANTUM SAFE     │
-       │                                    └──────────┬────────┘
+       │                                    │   keypair            │
+       │                                    │ - Sign message       │
+       │                                    │ - Verify signature   │
+       │                                    │ ✓ QUANTUM SAFE       │
+       │                                    └──────────┬───────────┘
        │  4. Returns PQC signature demo                │
        │     "Dilithium3 signature: [bytes]"           │
        │     "Verification: ✓ VALID"                   │
@@ -116,12 +116,12 @@ Because Java 17 doesn't support PQC in TLS, we demonstrate PQC **inside** the ap
        │  5. GET /pqc/kem                              │
        ├──────────────────────────────────────────────>│
        │                                               │
-       │                                    ┌──────────┴────────┐
+       │                                    ┌──────────┴─────────┐
        │                                    │   PqcKemService    │
        │                                    │ - NTRU keypair     │
        │                                    │ - Key encapsulation│
        │                                    │ ✓ QUANTUM SAFE     │
-       │                                    └──────────┬────────┘
+       │                                    └──────────┬─────────┘
        │  6. Returns KEM demo                          │
        │<──────────────────────────────────────────────│
        │                                               │
@@ -181,17 +181,17 @@ This is the **best approach** for transitioning to PQC:
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│              CHIMERA HYBRID CERTIFICATE                      │
-│                                                              │
+│              CHIMERA HYBRID CERTIFICATE                     │
+│                                                             │
 │  ┌────────────────────┐      ┌────────────────────┐         │
 │  │   PRIMARY LAYER    │      │ ALTERNATIVE LAYER  │         │
 │  │   (Classical RSA)  │      │   (PQC Dilithium)  │         │
 │  └─────────┬──────────┘      └─────────┬──────────┘         │
-│            │                           │                     │
-│            │  Subject: CN=localhost    │                     │
-│            │  Issuer: CN=PQC Hybrid CA │                     │
-│            │  Serial: 1234567890       │                     │
-│            │                           │                     │
+│            │                           │                    │
+│            │  Subject: CN=localhost    │                    │
+│            │  Issuer: CN=PQC Hybrid CA │                    │
+│            │  Serial: 1234567890       │                    │
+│            │                           │                    │
 │  ┌─────────▼──────────┐      ┌─────────▼──────────┐         │
 │  │ RSA-2048           │      │ Extension OID      │         │
 │  │ Public Key         │      │ 2.5.29.72:         │         │
@@ -204,10 +204,10 @@ This is the **best approach** for transitioning to PQC:
 │  │ [RSA signature     │      │ Dilithium3         │         │
 │  │  bytes]            │      │ Signature bytes    │         │
 │  └────────────────────┘      └────────────────────┘         │
-│                                                              │
-│  Verification: BOTH signatures must be valid!                │
+│                                                             │
+│  Verification: BOTH signatures must be valid!               │
 │  - Old systems: Check RSA only ✓                            │
-│  - PQC systems: Check RSA ✓ AND Dilithium ✓                │
+│  - PQC systems: Check RSA ✓ AND Dilithium ✓                 │
 └─────────────────────────────────────────────────────────────┘
 ```
 
@@ -236,7 +236,7 @@ This is the **best approach** for transitioning to PQC:
 │ │   Value: [3045022100...]    │ │
 │ └─────────────────────────────┘ │
 │                                 │
-│ ⚠️ QUANTUM VULNERABLE            │
+│ ⚠️ QUANTUM VULNERABLE           │
 └─────────────────────────────────┘
 ```
 
@@ -247,7 +247,7 @@ This is the **best approach** for transitioning to PQC:
 ├─────────────────────────────────────────────────────┤
 │ Version: 3                                          │
 │ Serial: 0x123456                                    │
-│ Issuer: CN=PQC Hybrid CA                           │
+│ Issuer: CN=PQC Hybrid CA                            │
 │ Subject: CN=localhost                               │
 │ ┌─────────────────────────────┐                     │
 │ │ Public Key (PRIMARY):       │                     │
@@ -260,7 +260,7 @@ This is the **best approach** for transitioning to PQC:
 │ │ ┌─────────────────────────┐ │                     │
 │ │ │ OID 2.5.29.72:          │ │                     │
 │ │ │ altSubjectPublicKeyInfo │ │                     │
-│ │ │   Algorithm: Dilithium3 │ │ ✓ Post-Quantum     │
+│ │ │   Algorithm: Dilithium3 │ │ ✓ Post-Quantum      │
 │ │ │   Key: [3082071E...]    │ │                     │
 │ │ │   Size: 1976 bytes      │ │                     │
 │ │ └─────────────────────────┘ │                     │
@@ -272,7 +272,7 @@ This is the **best approach** for transitioning to PQC:
 │ │ ┌─────────────────────────┐ │                     │
 │ │ │ OID 2.5.29.74:          │ │                     │
 │ │ │ altSignatureValue       │ │                     │
-│ │ │   Signature: [D1L1...]  │ │ ✓ Post-Quantum     │
+│ │ │   Signature: [D1L1...]  │ │ ✓ Post-Quantum      │
 │ │ │   Size: 3309 bytes      │ │                     │
 │ │ └─────────────────────────┘ │                     │
 │ └─────────────────────────────┘                     │
@@ -281,7 +281,7 @@ This is the **best approach** for transitioning to PQC:
 │ │   Algorithm: SHA256withRSA  │ ✓ Classical         │
 │ │   Value: [3045022100...]    │                     │
 │ └─────────────────────────────┘                     │
-│                                                      │
+│                                                     │
 │ ✓ HYBRID: Protected against classical AND quantum!  │
 └─────────────────────────────────────────────────────┘
 ```
@@ -292,7 +292,7 @@ This is the **best approach** for transitioning to PQC:
 
 ```
 ┌────────────────────────────────────────────────────────────────┐
-│              HTTP PQC Example - Three Approaches                │
+│              HTTP PQC Example - Three Approaches               │
 └────────────────────────────────────────────────────────────────┘
 
 1️⃣  PURE PQC SIGNATURES (Dilithium3)

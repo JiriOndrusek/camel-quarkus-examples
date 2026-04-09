@@ -17,6 +17,7 @@
 package org.acme.http.pqc.certificates;
 
 import java.io.FileOutputStream;
+import java.io.FileWriter;
 import java.math.BigInteger;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -38,6 +39,7 @@ import org.bouncycastle.cert.X509CertificateHolder;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
+import org.bouncycastle.openssl.jcajce.JcaPEMWriter;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.slf4j.Logger;
@@ -153,13 +155,15 @@ public class HybridCertificateGenerator {
      * @param keystorePath        Path where keystore will be saved
      * @param alias               Keystore entry alias
      * @param includeTruststore   Whether to also create a truststore
+     * @param savePemFiles        Whether to also save certificate and key as PEM files
      */
     private static void generateKeystore(
             String commonName,
             boolean includeAltSignature,
             String keystorePath,
             String alias,
-            boolean includeTruststore) throws Exception {
+            boolean includeTruststore,
+            boolean savePemFiles) throws Exception {
 
         CertificateData certData = generateChimeraCertificate(commonName, includeAltSignature);
 
@@ -181,6 +185,24 @@ public class HybridCertificateGenerator {
             saveKeyStore(trustStore, trustPath, KEYSTORE_PASSWORD);
             LOG.info("Truststore created: {}", trustPath);
         }
+
+        if (savePemFiles) {
+            // Save certificate as PEM
+            String certPemPath = keystorePath.replace(".p12", "-cert.pem");
+            try (FileWriter certWriter = new FileWriter(certPemPath);
+                    JcaPEMWriter pemWriter = new JcaPEMWriter(certWriter)) {
+                pemWriter.writeObject(certData.certificate);
+            }
+            LOG.info("Certificate PEM file created: {}", certPemPath);
+
+            // Save private key as PEM
+            String keyPemPath = keystorePath.replace(".p12", "-key.pem");
+            try (FileWriter keyWriter = new FileWriter(keyPemPath);
+                    JcaPEMWriter pemWriter = new JcaPEMWriter(keyWriter)) {
+                pemWriter.writeObject(certData.rsaKeyPair.getPrivate());
+            }
+            LOG.info("Private key PEM file created: {}", keyPemPath);
+        }
     }
 
     /**
@@ -188,15 +210,16 @@ public class HybridCertificateGenerator {
      */
     public static void generateServerKeystore() throws Exception {
         generateKeystore("localhost", true, KEYSTORES_DIR + "/server-hybrid-keystore.p12",
-                "server", true);
+                "server", true, false);
     }
 
     /**
      * Generates client hybrid keystore with RSA + Dilithium3 certificate.
+     * Also saves PEM files for manual curl testing.
      */
     public static void generateClientHybridKeystore() throws Exception {
         generateKeystore("client-hybrid", true, KEYSTORES_DIR + "/client-hybrid-keystore.p12",
-                "client", false);
+                "client", false, true);
     }
 
     /**
@@ -204,7 +227,7 @@ public class HybridCertificateGenerator {
      */
     public static void generateClientRsaOnlyKeystore() throws Exception {
         generateKeystore("client-rsa-only", false, KEYSTORES_DIR + "/client-rsa-only-keystore.p12",
-                "client", false);
+                "client", false, false);
     }
 
     /**
