@@ -82,11 +82,11 @@ public class PqcCamelRoute extends EndpointRouteBuilder {
 
                                 info.append("\nConfigured Named Groups: ").append(namedGroups).append("\n");
 
-                                if (namedGroups.contains("x25519_mlkem768")) {
+                                if (namedGroups.contains("X25519MLKEM768")) {
                                     info.append("\n✓ X25519MLKEM768 is ENABLED in configuration\n");
                                     info.append("\nNote: The actual negotiated key exchange algorithm is not directly\n");
                                     info.append("exposed via standard SSLSession API. The negotiation depends on:\n");
-                                    info.append("1. Server configured named groups (x25519_mlkem768)\n");
+                                    info.append("1. Server configured named groups (X25519MLKEM768)\n");
                                     info.append("2. Client support for X25519MLKEM768\n");
                                     info.append("3. TLS 1.3 negotiation process\n\n");
                                     info.append("For detailed verification, enable SSL debug logging:\n");

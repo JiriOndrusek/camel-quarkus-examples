@@ -44,10 +44,10 @@ class HttpPqcTest {
     void testPqcNamedGroupsConfigured() {
         String namedGroups = System.getProperty("jdk.tls.namedGroups");
         assertNotNull(namedGroups, "TLS named groups should be configured");
-        assertTrue(namedGroups.contains("x25519_mlkem768"),
-                "Named groups should include x25519_mlkem768 for PQC support. Found: " + namedGroups);
-        assertTrue(namedGroups.contains("x25519"),
-                "Named groups should include x25519 for compatibility. Found: " + namedGroups);
+        assertTrue(namedGroups.contains("X25519MLKEM768"),
+                "Named groups should include X25519MLKEM768 for PQC support. Found: " + namedGroups);
+        assertTrue(namedGroups.contains("secp256r1"),
+                "Named groups should include secp256r1 for compatibility. Found: " + namedGroups);
     }
 
     @Test
@@ -100,8 +100,7 @@ class HttpPqcTest {
                 .body(containsString("Post-Quantum Cryptography Configuration"))
                 .body(containsString("BouncyCastle JSSE"))
                 .body(containsString("ML-KEM-768"))
-                .body(containsString("X25519MLKEM768"))
-                .body(containsString("x25519_mlkem768"));
+                .body(containsString("X25519MLKEM768"));
     }
 
     @Test
@@ -122,7 +121,7 @@ class HttpPqcTest {
         // Verify that configuration mentions X25519MLKEM768
         // Note: RestAssured's test client may not expose full SSL session details in tests
         // so we verify the configuration is set, even if SSL session extraction doesn't work
-        assertTrue(response.contains("X25519MLKEM768 is ENABLED") || response.contains("x25519_mlkem768") ||
+        assertTrue(response.contains("X25519MLKEM768 is ENABLED") || response.contains("X25519MLKEM768") ||
                 response.contains("Request is not using SSL/TLS"),
                 "Response should mention X25519MLKEM768 configuration or SSL limitation. Response: " + response);
 

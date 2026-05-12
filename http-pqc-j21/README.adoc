@@ -67,7 +67,7 @@ Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
 
 // Configure TLS named groups to enable X25519MLKEM768
 System.setProperty("jdk.tls.namedGroups",
-    "x25519_mlkem768, x25519, secp256r1, secp384r1, secp521r1");
+    "X25519MLKEM768, x25519, secp256r1, secp384r1, secp521r1");
 ----
 
 This configuration:
@@ -76,7 +76,7 @@ This configuration:
 2. **Enables X25519MLKEM768** as the preferred named group (key exchange algorithm) for TLS 1.3
 3. **Maintains compatibility** by including standard elliptic curves (x25519, secp256r1, etc.) as fallback options
 
-The `jdk.tls.namedGroups` system property controls which key exchange algorithms are available during TLS negotiation. By placing `x25519_mlkem768` first, it becomes the preferred choice when both client and server support it.
+The `jdk.tls.namedGroups` system property controls which key exchange algorithms are available during TLS negotiation. By placing `X25519MLKEM768` first, it becomes the preferred choice when both client and server support it.
 
 === Hybrid Key Exchange (X25519MLKEM768)
 
@@ -181,13 +181,13 @@ TLS Session Verification
 TLS Protocol: TLSv1.3
 Cipher Suite: TLS_AES_256_GCM_SHA384
 
-Configured Named Groups: x25519_mlkem768, x25519, secp256r1, secp384r1, secp521r1
+Configured Named Groups: X25519MLKEM768, x25519, secp256r1, secp384r1, secp521r1
 
 ✓ X25519MLKEM768 is ENABLED in configuration
 
 Note: The actual negotiated key exchange algorithm is not directly
 exposed via standard SSLSession API. The negotiation depends on:
-1. Server configured named groups (x25519_mlkem768)
+1. Server configured named groups (X25519MLKEM768)
 2. Client support for X25519MLKEM768
 3. TLS 1.3 negotiation process
 

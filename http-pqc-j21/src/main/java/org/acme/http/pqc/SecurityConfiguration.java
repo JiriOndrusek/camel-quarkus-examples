@@ -20,6 +20,7 @@ import java.security.Security;
 
 import io.quarkus.runtime.Startup;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.jboss.logging.Logger;
 
@@ -30,23 +31,34 @@ public class SecurityConfiguration {
     private static final Logger LOG = Logger.getLogger(SecurityConfiguration.class);
 
     public SecurityConfiguration() {
-        // Insert BouncyCastle JSSE provider at position 1 (highest priority)
-        // This makes BC the primary provider for all JSSE operations in this JVM,
-        // enabling TLS 1.3 with PQC hybrid cipher suites (X25519MLKEM768)
+        // Remove ECDH from jdk.tls.disabledAlgorithms.
+        // JDK 21 disables raw "ECDH" which BCJSSE interprets broadly,
+        // preventing EC credentials from being used in TLS handshakes.
+        String disabled = Security.getProperty("jdk.tls.disabledAlgorithms");
+        if (disabled != null) {
+            disabled = disabled.replaceAll(",\\s*ECDH\\b", "");
+            Security.setProperty("jdk.tls.disabledAlgorithms", disabled);
+            LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
+        }
+
+        // Register BC at the end (low priority) so BCJSSE can use it
+        // for key conversion, while JDK's SUN/SunJCE remain the preferred
+        // providers for PKCS12 KeyStore and PBE algorithms.
+        Security.addProvider(new BouncyCastleProvider());
+        LOG.info("Registered BouncyCastleProvider at end of provider list");
+
+        // Register BCJSSE at position 1 for TLS.
+        // BCJSSE will find BC from the global provider list.
         Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
 
         // Configure JSSE to enable PQC hybrid key exchange algorithms
         // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
-        // NOTE: As of BouncyCastle 1.84, X25519MLKEM768 support in TLS may not be fully available
-        // This configuration demonstrates the approach for when it becomes available
         String namedGroups = System.getProperty("jdk.tls.namedGroups");
         if (namedGroups == null || namedGroups.isEmpty()) {
             // Enable X25519MLKEM768 along with standard groups for compatibility
-            // If x25519_mlkem768 is not recognized by the current BC version, it will fall back to x25519
             System.setProperty("jdk.tls.namedGroups",
-                    "x25519_mlkem768, x25519, secp256r1, secp384r1, secp521r1");
-            LOG.info("Configured TLS named groups for PQC: x25519_mlkem768, x25519, secp256r1, secp384r1, secp521r1");
-            LOG.info("NOTE: If x25519_mlkem768 is not recognized, TLS will use x25519 as fallback");
+                    "X25519MLKEM768,secp256r1,secp384r1,secp521r1");
+            LOG.info("Configured TLS named groups for PQC: X25519MLKEM768,secp256r1,secp384r1,secp521r1");
         } else {
             LOG.info("TLS named groups already configured: " + namedGroups);
         }
