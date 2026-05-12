@@ -1,0 +1,175 @@
+= Camel Quarkus HTTP PQC Java 21 Example 03: X25519MLKEM768-Only with Fallback Tests
+:cq-example-description: Demonstrates Post-Quantum Cryptography (PQC) enforcement and backward compatibility testing
+
+{cq-description}
+
+This example demonstrates strict PQC enforcement using X25519MLKEM768-only configuration and includes comprehensive tests to prove PQC is actually being used and to demonstrate backward compatibility through fallback mechanisms.
+
+== Overview
+
+This example is based on the reference implementation from https://github.com/oscerd/camel-pqc-tls/tree/main/pqc-ssl-context-jdk21 with the certificate generation structure from http-pqc-j17.
+
+=== Key Features
+
+* Server configured with X25519MLKEM768 ONLY by default (no fallback)
+* Runtime certificate generation using BouncyCastle
+* Three comprehensive tests demonstrating PQC enforcement and fallback
+
+=== Configuration
+
+The default configuration (`SecurityConfiguration.java`) sets:
+
+[source,java]
+----
+System.setProperty("jdk.tls.namedGroups", "X25519MLKEM768");
+----
+
+This enforces PQC-only connections, preventing classical algorithm fallback.
+
+== Test Suite
+
+=== Test 1: PqcOnlyBcjsseTest
+
+Tests BouncyCastle JSSE client with X25519MLKEM768-only server.
+
+*Expected Result:* ✓ SUCCESS
+
+*Proves:* BCJSSE supports X25519MLKEM768 and can successfully connect to PQC-only server.
+
+[source,bash]
+----
+mvn clean test -Dtest=PqcOnlyBcjsseTest
+----
+
+=== Test 2: StandardTlsFailsTest
+
+Tests standard Java TLS 1.3 (SunJSSE) client with X25519MLKEM768-only server.
+
+*Expected Result:* ✓ FAILURE (expected)
+
+*Proves:* SunJSSE on JDK 21 does NOT support X25519MLKEM768, confirming that:
+1. Server truly requires PQC (no fallback algorithms)
+2. Classical TLS implementations cannot connect
+3. X25519MLKEM768 is actually being enforced
+
+[source,bash]
+----
+mvn clean test -Dtest=StandardTlsFailsTest
+----
+
+=== Test 3: PqcWithFallbackTest
+
+Tests both BCJSSE and SunJSSE clients with modified server configuration: `X25519MLKEM768,secp256r1`
+
+*Expected Result:* ✓ BOTH SUCCEED
+
+*Proves:*
+- BCJSSE can use X25519MLKEM768 (PQC preferred)
+- SunJSSE can use secp256r1 fallback (backward compatibility)
+- Demonstrates gradual migration strategy
+
+[source,bash]
+----
+mvn clean test -Dtest=PqcWithFallbackTest
+----
+
+== Running All Tests
+
+To run all three tests:
+
+[source,bash]
+----
+mvn clean test
+----
+
+== Why This Matters
+
+=== Test 1 + Test 2 = Definitive Proof
+
+When Test 1 (BCJSSE) succeeds AND Test 2 (SunJSSE) fails with the same server configuration, this provides mathematical certainty that X25519MLKEM768 is being used:
+
+1. Server has NO fallback algorithms (X25519MLKEM768 only)
+2. BCJSSE succeeds → must have negotiated X25519MLKEM768
+3. SunJSSE fails → confirms no classical algorithms available
+4. Conclusion: X25519MLKEM768 is provably required and used
+
+=== Test 3 = Backward Compatibility
+
+Test 3 demonstrates that adding a classical algorithm fallback (secp256r1) enables:
+- PQC-capable clients to use quantum-resistant algorithms
+- Legacy clients to still connect using classical cryptography
+- Smooth transition path from classical to post-quantum TLS
+
+== Prerequisites
+
+* JDK 21 or higher
+* Maven 3.8.1+
+
+== Running the Application
+
+[source,bash]
+----
+mvn clean compile quarkus:dev
+----
+
+The server will start on https://localhost:8443 with X25519MLKEM768-only configuration.
+
+== Implementation Details
+
+=== Certificate Generation
+
+Certificates are generated at runtime using BouncyCastle:
+- RSA 4096-bit keys (future-proof, consistent with PQC security goals)
+- Self-signed certificates
+- Automatic keystore/truststore creation in `target/certs/`
+
+See `CertificateGenerator.java` for implementation.
+
+=== Security Configuration
+
+`SecurityConfiguration.java` handles:
+- BouncyCastle provider registration
+- ECDH algorithm enablement (required for BCJSSE on JDK 21)
+- TLS named groups configuration
+- Certificate generation orchestration
+
+=== Named Groups Configuration
+
+The configuration can be overridden via the `pqc.named.groups` system property:
+
+[source,bash]
+----
+# PQC only (default)
+-Dpqc.named.groups=X25519MLKEM768
+
+# PQC with fallback
+-Dpqc.named.groups=X25519MLKEM768,secp256r1
+
+# Multiple fallbacks
+-Dpqc.named.groups=X25519MLKEM768,secp256r1,secp384r1
+----
+
+== Available PQC Named Groups
+
+*Hybrid variants (classical + PQC):*
+- X25519MLKEM768 (X25519 + ML-KEM-768)
+- SecP256r1MLKEM768 (secp256r1 + ML-KEM-768)
+- SecP384r1MLKEM1024 (secp384r1 + ML-KEM-1024)
+
+*Pure PQC:*
+- MLKEM512
+- MLKEM768
+- MLKEM1024
+
+== Dependencies
+
+- `camel-quarkus-platform-http`: HTTP server support
+- `camel-quarkus-support-bouncycastle`: BouncyCastle integration
+- `bctls-jdk18on 1.84`: BouncyCastle JSSE provider for PQC
+
+== Further Information
+
+* https://github.com/oscerd/camel-pqc-tls - Reference implementation
+* https://camel.apache.org/camel-quarkus/latest/ - Camel Quarkus documentation
+* https://www.bouncycastle.org/ - BouncyCastle cryptography library
+* https://csrc.nist.gov/Projects/post-quantum-cryptography - NIST PQC standardization
