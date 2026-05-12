@@ -133,4 +133,55 @@ class HttpPqcTest {
         // The fact that configuration is readable shows the endpoint works
         // Real verification should be done with actual HTTPS clients (curl, browser, etc.)
     }
+
+    @Test
+    void testMTLSRequirementEnforced() {
+        // Negative test: Verify that requests WITHOUT client certificate are rejected
+        // This confirms that mTLS (mutual TLS) is properly enforced
+
+        // Reset RestAssured to not use any keystores
+        RestAssured.reset();
+
+        // Only configure truststore (to trust server), but NO client certificate
+        RestAssured.trustStore("target/certs/client-truststore.p12", "changeit");
+
+        // The request should fail because server requires client certificate
+        // Expected: SSLHandshakeException or similar connection failure
+        // RestAssured will throw an exception which we catch and verify
+        try {
+            given()
+                    .when()
+                    .get("/pqc/secure")
+                    .then()
+                    .statusCode(200); // This should NOT succeed
+
+            // If we reach here, the test should fail
+            assertTrue(false,
+                    "Request without client certificate should have been rejected by mTLS requirement");
+        } catch (Exception e) {
+            // Expected: Connection should fail due to missing client certificate
+            // Verify the exception is related to SSL/TLS handshake or certificate
+            String errorMsg = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            String causeMsg = e.getCause() != null && e.getCause().getMessage() != null
+                    ? e.getCause().getMessage().toLowerCase() : "";
+            String combinedMsg = errorMsg + " " + causeMsg;
+
+            assertTrue(
+                    combinedMsg.contains("ssl") ||
+                            combinedMsg.contains("tls") ||
+                            combinedMsg.contains("certificate") ||
+                            combinedMsg.contains("handshake") ||
+                            combinedMsg.contains("peer not authenticated") ||
+                            combinedMsg.contains("connection"),
+                    "Exception should be related to SSL/TLS or certificate issue. Got: " + e.getClass().getName() +
+                            " - " + combinedMsg);
+
+            System.out.println("✓ Negative test passed: mTLS requirement correctly rejected request without client cert");
+            System.out.println("  Exception: " + e.getClass().getSimpleName() + ": " + combinedMsg.substring(0,
+                    Math.min(100, combinedMsg.length())));
+        } finally {
+            // Reset RestAssured state for other tests
+            RestAssured.reset();
+        }
+    }
 }

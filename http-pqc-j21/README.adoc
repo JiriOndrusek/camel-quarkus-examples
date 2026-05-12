@@ -245,6 +245,7 @@ The test suite validates:
 * `/pqc/secure` endpoint accepts requests with valid client certificates
 * `/pqc/info` endpoint provides PQC configuration information
 * `/pqc/verify` endpoint confirms PQC configuration is active
+* mTLS requirement is enforced (negative test: rejects requests without client certificate)
 
 For native mode testing:
 
