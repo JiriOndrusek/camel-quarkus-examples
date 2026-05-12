@@ -1,0 +1,228 @@
+= Camel Quarkus HTTP PQC Java 21 Example
+:cq-example-description: Demonstrates Post-Quantum Cryptography (PQC) enforcement and backward compatibility testing
+
+{cq-description}
+
+This example demonstrates strict PQC enforcement using X25519MLKEM768-only configuration and includes comprehensive tests to prove PQC is actually being used and to demonstrate backward compatibility through fallback mechanisms.
+
+== Overview
+
+This example is based on the reference implementation from https://github.com/oscerd/camel-pqc-tls/tree/main/pqc-ssl-context-jdk21 with the certificate generation structure from http-pqc-j17.
+
+=== Key Features
+
+* Server configured with X25519MLKEM768 ONLY by default (no fallback)
+* Runtime certificate generation using BouncyCastle
+* Comprehensive tests demonstrating PQC enforcement and fallback compatibility
+* Support for both JVM and native execution modes
+
+=== Configuration
+
+The default configuration (`SecurityConfiguration.java`) sets:
+
+[source,java]
+----
+System.setProperty("jdk.tls.namedGroups", "X25519MLKEM768");
+----
+
+This enforces PQC-only connections, preventing classical algorithm fallback.
+
+== Test Suite
+
+=== PqcOnlyTest - Proving PQC Enforcement
+
+Tests both BouncyCastle JSSE and SunJSSE clients against X25519MLKEM768-only server.
+
+*Test Methods:*
+
+1. `testHttpClientWithBCJSSE` - BouncyCastle JSSE client
+   * *Expected:* ✓ SUCCESS
+   * *Proves:* BCJSSE supports X25519MLKEM768
+
+2. `testHttpClientWithSunJSSE` - Standard Java TLS client
+   * *Expected:* ✓ FAILURE (expected)
+   * *Proves:* SunJSSE does NOT support X25519MLKEM768, confirming true PQC enforcement
+
+[source,bash]
+----
+# Run specific test methods
+mvn clean test -Dtest=PqcOnlyTest#testHttpClientWithBCJSSE
+mvn clean test -Dtest=PqcOnlyTest#testHttpClientWithSunJSSE
+
+# Run all PqcOnlyTest methods
+mvn clean test -Dtest=PqcOnlyTest
+----
+
+=== PqcWithFallbackTest - Demonstrating Backward Compatibility
+
+Tests both BCJSSE and SunJSSE clients with fallback-enabled server configuration: `X25519MLKEM768,x25519,secp256r1`
+
+*Expected Result:* ✓ BOTH SUCCEED
+
+*Proves:*
+- BCJSSE can use X25519MLKEM768 (PQC preferred)
+- SunJSSE can use secp256r1 fallback (backward compatibility)
+- Demonstrates gradual migration strategy
+
+[source,bash]
+----
+mvn clean test -Dtest=PqcWithFallbackTest
+----
+
+=== Running All Tests
+
+To run all tests in JVM mode:
+
+[source,bash]
+----
+mvn clean test
+----
+
+*Important:* Tests are executed in a specific order using `@Order` annotation:
+1. `PqcWithFallbackTest` (Order 1) runs first
+2. `PqcOnlyTest` (Order 2) runs second
+
+This ordering is required because SunJSSE's static initialization fails permanently when PQC-only configuration is encountered first. The fallback test must run first to validate that SunJSSE works with classical algorithms.
+
+== Native Mode Testing
+
+=== Native Test Coverage
+
+Native mode tests are limited compared to JVM mode:
+
+* *JVM mode:* Both `PqcOnlyTest` and `PqcWithFallbackTest` run
+* *Native mode:* Only `PqcWithFallbackIT` runs
+
+=== Why PqcOnlyIT Doesn't Exist
+
+A native executable can only be built with a single `jdk.tls.namedGroups` configuration. Since we need to test both PQC-only and PQC-with-fallback scenarios, we chose to build the native executable with the fallback configuration, as it's more representative of real-world usage where backward compatibility matters.
+
+Testing PQC-only in native mode would require:
+1. Building a separate native executable with `jdk.tls.namedGroups=X25519MLKEM768`
+2. Running tests against that executable
+3. Rebuilding with fallback configuration for other tests
+
+This was deemed unnecessarily complex for an example project.
+
+=== Running Native Tests
+
+[source,bash]
+----
+mvn clean verify -Dnative
+----
+
+This builds a native executable with fallback configuration and runs `PqcWithFallbackIT`.
+
+== Why This Matters
+
+=== PqcOnlyTest = Definitive Proof of PQC Enforcement
+
+When `testHttpClientWithBCJSSE` succeeds AND `testHttpClientWithSunJSSE` fails with the same server configuration, this provides mathematical certainty that X25519MLKEM768 is being used:
+
+1. Server has NO fallback algorithms (X25519MLKEM768 only)
+2. BCJSSE succeeds → must have negotiated X25519MLKEM768
+3. SunJSSE fails → confirms no classical algorithms available
+4. Conclusion: X25519MLKEM768 is provably required and used
+
+=== PqcWithFallbackTest = Backward Compatibility
+
+This test demonstrates that adding classical algorithm fallback enables:
+- PQC-capable clients to use quantum-resistant algorithms
+- Legacy clients to still connect using classical cryptography
+- Smooth transition path from classical to post-quantum TLS
+
+== Prerequisites
+
+* JDK 21 or higher (required for X25519MLKEM768 support)
+* Maven 3.8.1+
+
+== Running the Application
+
+[source,bash]
+----
+mvn clean compile quarkus:dev
+----
+
+The server will start on a random HTTPS port with X25519MLKEM768-only configuration. The actual port is displayed in the startup logs.
+
+== Security Notes
+
+WARNING: This is an example project for demonstration purposes.
+
+* Keystore passwords are hardcoded as "changeit" in source code and configuration files
+* Certificates are self-signed and generated at runtime
+* Client certificate authentication is enabled but certificates are generated for testing only
+
+*For production use:*
+- Use proper certificate management (e.g., Let's Encrypt, internal CA)
+- Store passwords securely (e.g., Kubernetes secrets, HashiCorp Vault)
+- Use production-grade keystores with proper permissions
+- Implement certificate rotation and monitoring
+
+== Implementation Details
+
+=== Certificate Generation
+
+Certificates are generated at runtime during test setup using BouncyCastle:
+- RSA 4096-bit keys (future-proof, consistent with PQC security goals)
+- Self-signed certificates
+- Automatic keystore/truststore creation in `target/certs/`
+
+See `src/test/java/org/acme/http/pqc/certificates/CertificateGenerator.java` for implementation.
+
+=== Security Configuration
+
+`SecurityConfiguration.java` handles:
+- BouncyCastle provider registration
+- TLS named groups configuration from `jdk.tls.namedGroups` property
+- Different provider setup for JVM vs native mode
+- Certificate generation orchestration
+
+=== Named Groups Configuration
+
+The configuration is set via the `jdk.tls.namedGroups` property in `application.properties` or test profiles:
+
+[source,bash]
+----
+# PQC only (used in PqcOnlyTest)
+jdk.tls.namedGroups=X25519MLKEM768
+
+# PQC with fallback (used in PqcWithFallbackTest)
+jdk.tls.namedGroups=X25519MLKEM768,x25519,secp256r1
+
+# Additional fallbacks can be added (example - not tested in this project)
+# jdk.tls.namedGroups=X25519MLKEM768,x25519,secp256r1,secp384r1
+----
+
+== Available PQC Named Groups
+
+*Hybrid variants (classical + PQC):*
+- X25519MLKEM768 (X25519 + ML-KEM-768) - Recommended
+- SecP256r1MLKEM768 (secp256r1 + ML-KEM-768)
+- SecP384r1MLKEM1024 (secp384r1 + ML-KEM-1024)
+
+*Pure PQC:*
+- MLKEM512
+- MLKEM768
+- MLKEM1024
+
+*Classical fallback options:*
+- x25519 (Curve25519)
+- secp256r1 (NIST P-256)
+- secp384r1 (NIST P-384)
+
+== Dependencies
+
+- `camel-quarkus-platform-http`: HTTP server support
+- `camel-quarkus-support-bouncycastle`: BouncyCastle integration
+- `bctls-jdk18on 1.84`: BouncyCastle JSSE provider for PQC
+- `camel-quarkus-jackson`: JSON processing
+- `camel-quarkus-microprofile-health`: Health check endpoints
+
+== Further Information
+
+* https://github.com/oscerd/camel-pqc-tls - Reference implementation
+* https://camel.apache.org/camel-quarkus/latest/ - Camel Quarkus documentation
+* https://www.bouncycastle.org/ - BouncyCastle cryptography library
+* https://csrc.nist.gov/Projects/post-quantum-cryptography - NIST PQC standardization
+* https://datatracker.ietf.org/doc/draft-ietf-tls-hybrid-design/ - TLS Hybrid Key Exchange specification
