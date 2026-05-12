@@ -16,6 +16,7 @@
  */
 package org.acme.http.pqc;
 
+import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
 
@@ -46,13 +47,71 @@ public class PqcCamelRoute extends EndpointRouteBuilder {
                                     "Java Version: %s\n" +
                                     "Provider: BouncyCastle JSSE\n" +
                                     "TLS Version: 1.3\n" +
-                                    "Hybrid Cipher Suite: X25519MLKEM768\n" +
+                                    "Configured Named Groups: %s\n" +
+                                    "Target Hybrid KEX: X25519MLKEM768\n" +
                                     "Classical Algorithm: X25519\n" +
                                     "PQC Algorithm: ML-KEM-768 (NIST FIPS 203)\n\n" +
-                                    "This configuration provides protection against both classical and quantum attacks.",
-                            System.getProperty("java.version"));
+                                    "This configuration provides protection against both classical and quantum attacks.\n\n" +
+                                    "Note: To verify the actual negotiated parameters, check the server logs\n" +
+                                    "or use the /pqc/verify endpoint.",
+                            System.getProperty("java.version"),
+                            System.getProperty("jdk.tls.namedGroups", "default"));
                     exchange.getMessage().setBody(info);
                 })
                 .to(log("pqc-info").showExchangePattern(false).showBodyType(false));
+
+        from(platformHttp("/pqc/verify"))
+                .routeId("pqc-verify-route")
+                .log("Verifying actual TLS session parameters")
+                .process(exchange -> {
+                    HttpServerRequest request = exchange.getProperty("HttpServerRequest", HttpServerRequest.class);
+                    StringBuilder info = new StringBuilder();
+                    info.append("TLS Session Verification\n");
+                    info.append("========================\n\n");
+
+                    if (request != null && request.isSSL()) {
+                        try {
+                            javax.net.ssl.SSLSession sslSession = request.sslSession();
+                            if (sslSession != null) {
+                                info.append("TLS Protocol: ").append(sslSession.getProtocol()).append("\n");
+                                info.append("Cipher Suite: ").append(sslSession.getCipherSuite()).append("\n");
+
+                                // Check if the cipher suite or session indicates PQC usage
+                                String cipherSuite = sslSession.getCipherSuite();
+                                String namedGroups = System.getProperty("jdk.tls.namedGroups", "");
+
+                                info.append("\nConfigured Named Groups: ").append(namedGroups).append("\n");
+
+                                if (namedGroups.contains("x25519_mlkem768")) {
+                                    info.append("\n✓ X25519MLKEM768 is ENABLED in configuration\n");
+                                    info.append("\nNote: The actual negotiated key exchange algorithm is not directly\n");
+                                    info.append("exposed via standard SSLSession API. The negotiation depends on:\n");
+                                    info.append("1. Server configured named groups (x25519_mlkem768)\n");
+                                    info.append("2. Client support for X25519MLKEM768\n");
+                                    info.append("3. TLS 1.3 negotiation process\n\n");
+                                    info.append("For detailed verification, enable SSL debug logging:\n");
+                                    info.append("-Djavax.net.debug=ssl:handshake\n");
+                                } else {
+                                    info.append("\n⚠ WARNING: X25519MLKEM768 not found in named groups configuration\n");
+                                }
+
+                                info.append("\nPeer Principal: ")
+                                        .append(sslSession.getPeerPrincipal() != null
+                                                ? sslSession.getPeerPrincipal().getName()
+                                                : "N/A")
+                                        .append("\n");
+                            } else {
+                                info.append("⚠ SSL session is null\n");
+                            }
+                        } catch (Exception e) {
+                            info.append("Error retrieving SSL session: ").append(e.getMessage()).append("\n");
+                        }
+                    } else {
+                        info.append("⚠ Request is not using SSL/TLS\n");
+                    }
+
+                    exchange.getMessage().setBody(info.toString());
+                })
+                .to(log("pqc-verify").showExchangePattern(false).showBodyType(false));
     }
 }
