@@ -29,8 +29,6 @@ import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Date;
 
-import io.quarkus.runtime.Startup;
-import jakarta.enterprise.context.ApplicationScoped;
 import org.bouncycastle.asn1.x500.X500Name;
 import org.bouncycastle.asn1.x509.BasicConstraints;
 import org.bouncycastle.asn1.x509.Extension;
@@ -41,8 +39,15 @@ import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.jboss.logging.Logger;
 
-@ApplicationScoped
-@Startup
+/**
+ * Utility class for generating and persisting PQC-ready certificates for Java 21.
+ * These certificates use RSA keys and are compatible with BouncyCastle JSSE provider
+ * which enables PQC hybrid key exchange (X25519MLKEM768) at the TLS layer.
+ *
+ * <p>
+ * Certificates are automatically generated at application startup by
+ * {@link SecurityConfiguration} if they don't already exist.
+ */
 public class CertificateGenerator {
 
     private static final Logger LOG = Logger.getLogger(CertificateGenerator.class);
@@ -53,37 +58,71 @@ public class CertificateGenerator {
     private static final String KEYSTORE_PASSWORD = "changeit";
     private static final String CERT_DIR = "target/certs";
 
-    public CertificateGenerator() {
-        try {
-            generateCertificates();
-        } catch (Exception e) {
-            LOG.error("Failed to generate PQC certificates. Ensure BouncyCastle provider is available.", e);
-            throw new RuntimeException("Failed to generate PQC certificates", e);
+    /**
+     * Certificate data holder for keypairs and certificates.
+     */
+    public static class CertificateData {
+        public final KeyPair keyPair;
+        public final X509Certificate certificate;
+
+        public CertificateData(KeyPair keyPair, X509Certificate certificate) {
+            this.keyPair = keyPair;
+            this.certificate = certificate;
         }
     }
 
-    private void generateCertificates() throws Exception {
-        Path certDir = Paths.get(CERT_DIR);
-        Files.createDirectories(certDir);
+    // Cache certificate data to ensure keystores and truststores use the same certificates
+    private static CertificateData serverData;
+    private static CertificateData clientData;
 
-        LOG.info("Generating PQC-ready certificates for Java 21...");
-
-        KeyPair serverKeyPair = generateKeyPair();
-        X509Certificate serverCert = generateCertificate(serverKeyPair, "CN=localhost,O=Camel Quarkus,C=US", true);
-
-        KeyPair clientKeyPair = generateKeyPair();
-        X509Certificate clientCert = generateCertificate(clientKeyPair, "CN=client,O=Camel Quarkus,C=US", false);
-
-        saveKeyStore(certDir.resolve("server-keystore.p12"), serverKeyPair, serverCert);
-        saveKeyStore(certDir.resolve("client-keystore.p12"), clientKeyPair, clientCert);
-
-        saveTrustStore(certDir.resolve("server-truststore.p12"), clientCert);
-        saveTrustStore(certDir.resolve("client-truststore.p12"), serverCert);
-
-        LOG.info("PQC certificates generated successfully in " + CERT_DIR);
+    /**
+     * Generates server keystore with RSA certificate.
+     */
+    public static void generateServerKeystore() throws Exception {
+        serverData = generateCertificateData("CN=localhost,O=Camel Quarkus,C=US", true);
+        saveKeyStore(Paths.get(CERT_DIR, "server-keystore.p12"), serverData.keyPair, serverData.certificate, "server");
+        LOG.info("Server keystore created: " + CERT_DIR + "/server-keystore.p12");
     }
 
-    private KeyPair generateKeyPair() throws Exception {
+    /**
+     * Generates client keystore with RSA certificate.
+     */
+    public static void generateClientKeystore() throws Exception {
+        clientData = generateCertificateData("CN=client,O=Camel Quarkus,C=US", false);
+        saveKeyStore(Paths.get(CERT_DIR, "client-keystore.p12"), clientData.keyPair, clientData.certificate, "client");
+        LOG.info("Client keystore created: " + CERT_DIR + "/client-keystore.p12");
+    }
+
+    /**
+     * Generates truststores for both server and client using the cached certificate data.
+     * Must be called after generateServerKeystore() and generateClientKeystore().
+     */
+    public static void generateTruststores() throws Exception {
+        if (serverData == null || clientData == null) {
+            throw new IllegalStateException("Must call generateServerKeystore() and generateClientKeystore() first");
+        }
+
+        saveTrustStore(Paths.get(CERT_DIR, "server-truststore.p12"), clientData.certificate, "client-ca");
+        LOG.info("Server truststore created: " + CERT_DIR + "/server-truststore.p12");
+
+        saveTrustStore(Paths.get(CERT_DIR, "client-truststore.p12"), serverData.certificate, "server-ca");
+        LOG.info("Client truststore created: " + CERT_DIR + "/client-truststore.p12");
+    }
+
+    /**
+     * Generates a certificate with RSA keypair.
+     *
+     * @param  dn   The DN for the certificate subject
+     * @param  isCA Whether this is a CA certificate
+     * @return      CertificateData containing keypair and certificate
+     */
+    private static CertificateData generateCertificateData(String dn, boolean isCA) throws Exception {
+        KeyPair keyPair = generateKeyPair();
+        X509Certificate certificate = generateCertificate(keyPair, dn, isCA);
+        return new CertificateData(keyPair, certificate);
+    }
+
+    private static KeyPair generateKeyPair() throws Exception {
         try {
             KeyPairGenerator keyPairGenerator = KeyPairGenerator.getInstance("RSA", "BC");
             // Use 4096-bit RSA for future-proofing, consistent with PQC security goals
@@ -91,11 +130,11 @@ public class CertificateGenerator {
             return keyPairGenerator.generateKeyPair();
         } catch (java.security.NoSuchProviderException e) {
             throw new IllegalStateException("BouncyCastle provider (BC) not found. " +
-                    "Ensure SecurityConfiguration has registered BouncyCastleJsseProvider.", e);
+                    "Ensure SecurityConfiguration has registered BouncyCastleProvider.", e);
         }
     }
 
-    private X509Certificate generateCertificate(KeyPair keyPair, String dn, boolean isCA) throws Exception {
+    private static X509Certificate generateCertificate(KeyPair keyPair, String dn, boolean isCA) throws Exception {
         long now = System.currentTimeMillis();
         Date notBefore = new Date(now);
         // Valid for 3 years for development convenience
@@ -124,10 +163,16 @@ public class CertificateGenerator {
                 .getCertificate(certBuilder.build(signer));
     }
 
-    private void saveKeyStore(Path path, KeyPair keyPair, X509Certificate cert) throws Exception {
+    private static void saveKeyStore(Path path, KeyPair keyPair, X509Certificate cert, String alias) throws Exception {
+        Path dirPath = path.getParent();
+        if (!Files.exists(dirPath)) {
+            Files.createDirectories(dirPath);
+            LOG.info("Created directory: " + dirPath);
+        }
+
         KeyStore keyStore = KeyStore.getInstance("PKCS12", "BC");
         keyStore.load(null, null);
-        keyStore.setKeyEntry("key", keyPair.getPrivate(), KEYSTORE_PASSWORD.toCharArray(),
+        keyStore.setKeyEntry(alias, keyPair.getPrivate(), KEYSTORE_PASSWORD.toCharArray(),
                 new Certificate[] { cert });
 
         try (FileOutputStream fos = new FileOutputStream(path.toFile())) {
@@ -135,10 +180,16 @@ public class CertificateGenerator {
         }
     }
 
-    private void saveTrustStore(Path path, X509Certificate cert) throws Exception {
+    private static void saveTrustStore(Path path, X509Certificate cert, String alias) throws Exception {
+        Path dirPath = path.getParent();
+        if (!Files.exists(dirPath)) {
+            Files.createDirectories(dirPath);
+            LOG.info("Created directory: " + dirPath);
+        }
+
         KeyStore trustStore = KeyStore.getInstance("PKCS12", "BC");
         trustStore.load(null, null);
-        trustStore.setCertificateEntry("cert", cert);
+        trustStore.setCertificateEntry(alias, cert);
 
         try (FileOutputStream fos = new FileOutputStream(path.toFile())) {
             trustStore.store(fos, KEYSTORE_PASSWORD.toCharArray());

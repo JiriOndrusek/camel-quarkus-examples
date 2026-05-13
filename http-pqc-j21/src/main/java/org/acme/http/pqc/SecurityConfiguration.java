@@ -18,19 +18,19 @@ package org.acme.http.pqc;
 
 import java.security.Security;
 
-import io.quarkus.runtime.Startup;
+import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.enterprise.event.Observes;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.jboss.logging.Logger;
 
 @ApplicationScoped
-@Startup
 public class SecurityConfiguration {
 
     private static final Logger LOG = Logger.getLogger(SecurityConfiguration.class);
 
-    public SecurityConfiguration() {
+    void onStart(@Observes StartupEvent ev) {
         // Remove ECDH from jdk.tls.disabledAlgorithms.
         // JDK 21 disables raw "ECDH" which BCJSSE interprets broadly,
         // preventing EC credentials from being used in TLS handshakes.
@@ -65,5 +65,21 @@ public class SecurityConfiguration {
 
         LOG.info("BouncyCastle JSSE provider registered for PQC TLS support");
         LOG.info("Provider: " + Security.getProvider("BCJSSE").getInfo());
+
+        // Generate fresh PQC-ready certificates on every startup
+        generateCertificates();
+    }
+
+    private void generateCertificates() {
+        try {
+            LOG.info("Generating fresh PQC-ready certificates...");
+            CertificateGenerator.generateServerKeystore();
+            CertificateGenerator.generateClientKeystore();
+            CertificateGenerator.generateTruststores();
+            LOG.info("PQC-ready certificates generated successfully");
+        } catch (Exception e) {
+            LOG.error("Failed to generate PQC-ready certificates", e);
+            throw new RuntimeException("Certificate generation failed", e);
+        }
     }
 }
