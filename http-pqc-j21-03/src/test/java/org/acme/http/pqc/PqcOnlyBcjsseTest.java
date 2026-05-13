@@ -22,7 +22,6 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.RestAssured;
-import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -42,27 +41,17 @@ class PqcOnlyBcjsseTest {
 
     public static class PqcOnlyProfile implements QuarkusTestProfile {
 
-        static {
-            System.setProperty("pqc.named.groups", "X25519MLKEM768");
-        }
-
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            System.setProperty("pqc.named.groups", "X25519MLKEM768");
-            return Map.of(
-                    // Disable client auth requirement for simpler testing
-                    "quarkus.http.ssl.client-auth", "none");
-        }
-
         @Override
         public String getConfigProfile() {
             return "pqc-only";
         }
-    }
 
-    @BeforeAll
-    static void setup() {
-        System.setProperty("pqc.named.groups", "X25519MLKEM768");
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            return Map.of(
+                    // Disable client auth requirement for simpler testing
+                    "quarkus.http.ssl.client-auth", "none");
+        }
     }
 
     @Test

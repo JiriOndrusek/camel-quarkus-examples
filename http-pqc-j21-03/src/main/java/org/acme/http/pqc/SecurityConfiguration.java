@@ -18,6 +18,7 @@ package org.acme.http.pqc;
 
 import java.security.Security;
 
+import io.quarkus.arc.DefaultBean;
 import io.quarkus.runtime.StartupEvent;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
@@ -25,6 +26,7 @@ import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
 import org.jboss.logging.Logger;
 
+@DefaultBean
 @ApplicationScoped
 public class SecurityConfiguration {
 
@@ -41,6 +43,16 @@ public class SecurityConfiguration {
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
         }
 
+        // Remove existing BC providers to ensure clean state for each test
+        if (Security.getProvider("BCJSSE") != null) {
+            Security.removeProvider("BCJSSE");
+            LOG.info("Removed existing BouncyCastleJsseProvider");
+        }
+        if (Security.getProvider("BC") != null) {
+            Security.removeProvider("BC");
+            LOG.info("Removed existing BouncyCastleProvider");
+        }
+
         // Register BC at the end (low priority) so BCJSSE can use it
         // for key conversion, while JDK's SUN/SunJCE remain the preferred
         // providers for PKCS12 KeyStore and PBE algorithms.
@@ -50,6 +62,7 @@ public class SecurityConfiguration {
         // Register BCJSSE at position 1 for TLS.
         // BCJSSE will find BC from the global provider list.
         Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
+        LOG.info("Registered BouncyCastleJsseProvider at position 1");
 
         // Configure JSSE to enable PQC hybrid key exchange algorithms
         // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
