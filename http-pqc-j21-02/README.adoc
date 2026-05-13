@@ -1,0 +1,158 @@
+= Post-Quantum TLS with BouncyCastle JSSE on JDK 21 (Quarkus)
+:cq-example-description: Post-Quantum Cryptography example demonstrating X25519MLKEM768 hybrid key exchange using BouncyCastle JSSE on JDK 21
+
+{cq-description}
+
+This example is based on the approach from https://github.com/oscerd/camel-pqc-tls/tree/main/pqc-ssl-context-jdk21[oscerd/camel-pqc-tls] and demonstrates Post-Quantum Cryptography (PQC) TLS 1.3 handshake using X25519MLKEM768 hybrid key exchange on JDK 21 with Quarkus.
+
+TIP: Check the https://camel.apache.org/camel-quarkus/latest/first-steps.html[Camel Quarkus User guide] for prerequisites
+and other general information.
+
+== Overview
+
+This project demonstrates a functional Post-Quantum Cryptography (PQC) TLS 1.3 handshake using the X25519MLKEM768 hybrid key exchange on JDK 21. At startup, the application generates RSA key pairs and self-signed certificates at runtime using BouncyCastle's API. These certificates are PQC-ready and work with BouncyCastle JSSE provider which enables PQC hybrid key exchange at the TLS layer.
+
+=== What It Proves
+
+The example validates that an HTTPS server using BCJSSE (BouncyCastle JSSE) with configured named groups (which include X25519MLKEM768) successfully negotiates PQC during the TLS handshake without requiring JDK 27.
+
+=== Technology Stack
+
+* JDK 21 (minimum requirement)
+* BouncyCastle JSSE 1.84 (BCJSSE)
+* Quarkus {quarkus-version}
+* Apache Camel Quarkus {camel-quarkus-version}
+
+== Start in Development mode
+
+[source,shell]
+----
+$ mvn clean compile quarkus:dev
+----
+
+The above command compiles the project, starts the application, and generates fresh PQC-ready certificates on startup.
+
+The application exposes HTTPS endpoints on port 8443 with mutual TLS (mTLS) authentication required.
+
+== Verification
+
+The startup logs should display:
+----
+✓ PQC TLS configuration is READY
+----
+
+This confirms successful configuration for X25519MLKEM768 negotiation.
+
+You can also check the logs for BouncyCastle TLS server messages:
+----
+INFO  [org.bouncycastle.jsse.provider.ProvTlsServer] accepting connection...
+INFO  [org.bouncycastle.jsse.provider.ProvTlsServer] established connection...
+----
+
+== Available REST Endpoints
+
+=== GET /api/verify-pqc
+On-demand PQC handshake verification. Returns JSON with comprehensive configuration check including:
+* BCJSSE provider status and position
+* BouncyCastle provider presence
+* Named groups configuration
+* ECDH disabled status
+* Overall PQC readiness
+
+Example:
+[source,shell]
+----
+$ curl -k --cert target/certs/client-keystore.p12:changeit \
+       --cert-type P12 \
+       https://localhost:8443/api/verify-pqc
+----
+
+=== GET /api/ssl-info
+Returns BouncyCastle provider details and system SSL/TLS information including:
+* Java version and vendor
+* Registered security providers
+* TLS named groups configuration
+* Disabled algorithms
+
+Example:
+[source,shell]
+----
+$ curl -k --cert target/certs/client-keystore.p12:changeit \
+       --cert-type P12 \
+       https://localhost:8443/api/ssl-info
+----
+
+=== GET /api/data
+Returns PQC-secured data endpoint status information as JSON.
+
+Example:
+[source,shell]
+----
+$ curl -k --cert target/certs/client-keystore.p12:changeit \
+       --cert-type P12 \
+       https://localhost:8443/api/data
+----
+
+== Available PQC Named Groups
+
+The implementation supports the following PQC key exchange algorithms via BouncyCastle JSSE:
+
+*Hybrid Combinations (Classical + PQC):*
+* X25519MLKEM768 (X25519 + ML-KEM-768) - configured by default
+* SecP256r1MLKEM768 (secp256r1 + ML-KEM-768)
+* SecP384r1MLKEM1024 (secp384r1 + ML-KEM-1024)
+
+*Pure PQC Variants:*
+* MLKEM512
+* MLKEM768
+* MLKEM1024
+
+The default configuration in this example uses: `X25519MLKEM768,secp256r1,secp384r1,secp521r1`
+
+== Certificate Generation
+
+Certificates are automatically generated at application startup using the approach from the http-pqc-j17 example:
+
+* *Server Keystore*: `target/certs/server-keystore.p12` - Contains 4096-bit RSA server certificate
+* *Client Keystore*: `target/certs/client-keystore.p12` - Contains 4096-bit RSA client certificate
+* *Server Truststore*: `target/certs/server-truststore.p12` - Contains client CA certificate
+* *Client Truststore*: `target/certs/client-truststore.p12` - Contains server CA certificate
+
+All certificates are generated fresh on every startup to ensure they are always valid.
+
+WARNING: The keystore password "changeit" is hardcoded for demonstration purposes only. In production, use environment variables or secure configuration management.
+
+== JDK Compatibility
+
+This approach works on JDK 21 via BouncyCastle JSSE provider. For native PQC support without external libraries, JDK 27 includes JEP 527 which adds PQC to SunJSSE natively.
+
+== Testing
+
+Run tests with:
+[source,shell]
+----
+$ mvn clean test
+----
+
+For native image testing:
+[source,shell]
+----
+$ mvn clean verify -Dnative -Ddocker
+----
+
+== References
+
+* https://github.com/oscerd/camel-pqc-tls/tree/main/pqc-ssl-context-jdk21[Original oscerd/camel-pqc-tls example]
+* https://www.bouncycastle.org/java.html[BouncyCastle Cryptography APIs]
+* https://csrc.nist.gov/Projects/post-quantum-cryptography[NIST Post-Quantum Cryptography]
+* https://openjdk.org/jeps/527[JEP 527: Post-Quantum Cryptography in SunJSSE (JDK 27)]
+
+== Feedback
+
+Please report bugs and propose improvements via:
+https://github.com/apache/camel-quarkus/issues[Apache Camel Quarkus issue tracker].
+
+== Next Steps
+
+TODO
+
