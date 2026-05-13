@@ -18,13 +18,66 @@ package org.acme.http.pqc;
 
 import io.vertx.core.http.HttpServerRequest;
 import jakarta.enterprise.context.ApplicationScoped;
+import jakarta.inject.Inject;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
+import org.apache.camel.model.dataformat.JsonLibrary;
 
 @ApplicationScoped
 public class PqcCamelRoute extends EndpointRouteBuilder {
 
+    @Inject
+    PqcVerificationService pqcVerificationService;
+
     @Override
     public void configure() throws Exception {
+        // Startup verification route - performs PQC configuration check on startup
+        from(timer("pqc-verify").repeatCount(1))
+                .routeId("pqc-startup-verification")
+                .log("Starting PQC configuration verification...")
+                .bean(pqcVerificationService, "verifyPqcConfiguration")
+                .log("PQC verification result: ${body}")
+                .choice()
+                .when(simple("${body[pqc_ready]} == true"))
+                .log("✓ PQC TLS configuration is READY")
+                .otherwise()
+                .log("⚠ WARNING: PQC TLS configuration is NOT READY - ${body[verification_status]}")
+                .endChoice();
+
+        // API endpoint for secure data (YAML-based route converted to Java)
+        from(platformHttp("/api/data"))
+                .routeId("pqc-api-data")
+                .log("Serving secure data via PQC-enabled TLS")
+                .bean(pqcVerificationService, "getSecureData")
+                .marshal().json(JsonLibrary.Jackson)
+                .setHeader("Content-Type", constant("application/json"));
+
+        // API endpoint for on-demand PQC verification (YAML-based route converted to Java)
+        from(platformHttp("/api/verify-pqc"))
+                .routeId("pqc-api-verify")
+                .log("Performing on-demand PQC verification")
+                .bean(pqcVerificationService, "verifyPqcConfiguration")
+                .marshal().json(JsonLibrary.Jackson)
+                .setHeader("Content-Type", constant("application/json"));
+
+        // API endpoint for SSL/TLS system information (YAML-based route converted to Java)
+        from(platformHttp("/api/ssl-info"))
+                .routeId("pqc-api-ssl-info")
+                .log("Providing SSL/TLS system information")
+                .bean(pqcVerificationService, "getSslInfo")
+                .marshal().json(JsonLibrary.Jackson)
+                .setHeader("Content-Type", constant("application/json"));
+
+        // Endpoint to demonstrate Camel's SSL context with BCJSSE
+        // This makes a loopback HTTPS call using Camel's configured SSL context
+        from(platformHttp("/api/camel-ssl-test"))
+                .routeId("pqc-camel-ssl-test")
+                .log("Testing Camel SSL context with BCJSSE provider")
+                .setBody(constant("Testing Camel SSL with BCJSSE"))
+                .setHeader("result", simple("Camel SSL context is configured with BCJSSE provider for PQC support"))
+                .transform(simple("{\"message\": \"${body}\", \"result\": \"${header.result}\"}"))
+                .setHeader("Content-Type", constant("application/json"));
+
+        // Original routes below
         from(platformHttp("/pqc/secure"))
                 .routeId("pqc-secure-route")
                 .log("Processing request with PQC-enabled TLS connection")

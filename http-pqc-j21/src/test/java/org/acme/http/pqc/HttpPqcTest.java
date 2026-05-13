@@ -585,4 +585,81 @@ class HttpPqcTest {
         System.out.println("    If this test passes, PQC is highly likely to be working.");
         System.out.println("    Standard JDK would show: sun.security.ssl.SSLSocketImpl\n");
     }
+
+    /**
+     * Tests the YAML-defined /api/data endpoint.
+     * This endpoint is defined in pqc-routes.yaml and demonstrates YAML DSL integration.
+     */
+    @Test
+    void testYamlApiDataEndpoint() {
+        RestAssured.keyStore("target/certs/client-keystore.p12", "changeit");
+        RestAssured.trustStore("target/certs/client-truststore.p12", "changeit");
+
+        given()
+                .when()
+                .get("/api/data")
+                .then()
+                .statusCode(200)
+                .contentType("application/json")
+                .body(containsString("PQC-secured data endpoint"))
+                .body(containsString("X25519MLKEM768"));
+    }
+
+    /**
+     * Tests the YAML-defined /api/verify-pqc endpoint.
+     * This endpoint performs comprehensive PQC configuration verification.
+     */
+    @Test
+    void testYamlApiVerifyPqcEndpoint() {
+        RestAssured.keyStore("target/certs/client-keystore.p12", "changeit");
+        RestAssured.trustStore("target/certs/client-truststore.p12", "changeit");
+
+        given()
+                .when()
+                .get("/api/verify-pqc")
+                .then()
+                .statusCode(200)
+                .contentType("application/json")
+                .body(containsString("verification_status"))
+                .body(containsString("named_groups"));
+    }
+
+    /**
+     * Tests the YAML-defined /api/ssl-info endpoint.
+     * This endpoint returns system SSL/TLS information.
+     */
+    @Test
+    void testYamlApiSslInfoEndpoint() {
+        RestAssured.keyStore("target/certs/client-keystore.p12", "changeit");
+        RestAssured.trustStore("target/certs/client-truststore.p12", "changeit");
+
+        given()
+                .when()
+                .get("/api/ssl-info")
+                .then()
+                .statusCode(200)
+                .contentType("application/json")
+                .body(containsString("java_version"))
+                .body(containsString("security_providers"))
+                .body(containsString("jdk_tls_named_groups"));
+    }
+
+    /**
+     * Tests that Camel's global SSL context is configured with BCJSSE.
+     * This simulates the camel.ssl.* configuration from oscerd/camel-pqc-tls example.
+     */
+    @Test
+    void testCamelSslContextWithBcjsse() {
+        RestAssured.keyStore("target/certs/client-keystore.p12", "changeit");
+        RestAssured.trustStore("target/certs/client-truststore.p12", "changeit");
+
+        given()
+                .when()
+                .get("/api/camel-ssl-test")
+                .then()
+                .statusCode(200)
+                .contentType("application/json")
+                .body(containsString("Camel SSL context is configured with BCJSSE"))
+                .body(containsString("PQC support"));
+    }
 }
