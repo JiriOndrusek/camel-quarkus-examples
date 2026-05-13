@@ -17,10 +17,8 @@
 package org.acme.http.pqc;
 
 import java.io.FileInputStream;
-import java.net.URL;
 import java.security.KeyStore;
 
-import javax.net.ssl.HttpsURLConnection;
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.SSLHandshakeException;
@@ -30,6 +28,14 @@ import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.RestAssured;
+import org.apache.hc.client5.http.classic.methods.HttpGet;
+import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
+import org.apache.hc.client5.http.impl.classic.HttpClients;
+import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
+import org.apache.hc.client5.http.io.HttpClientConnectionManager;
+import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
+import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
+import org.apache.hc.core5.http.io.entity.EntityUtils;
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -78,22 +84,30 @@ class StandardTlsFailsTest {
         // Create SSLContext using standard Java JSSE (SunJSSE) explicitly
         SSLContext sslContext = createStandardJavaSslContext();
 
-        // Try to connect using standard Java HTTPS - should FAIL
+        // Create Apache HttpClient with explicit SunJSSE SSLContext
+        SSLConnectionSocketFactory sslSocketFactory = new SSLConnectionSocketFactory(
+                sslContext,
+                NoopHostnameVerifier.INSTANCE);
+
+        HttpClientConnectionManager connectionManager = PoolingHttpClientConnectionManagerBuilder.create()
+                .setSSLSocketFactory(sslSocketFactory)
+                .build();
+
+        // Try to connect using Apache HttpClient - should FAIL
         boolean failedAsExpected = false;
-        try {
-            URL url = new URL("https://localhost:" + port + "/api/data");
-            HttpsURLConnection conn = (HttpsURLConnection) url.openConnection();
-            conn.setSSLSocketFactory(sslContext.getSocketFactory());
+        try (CloseableHttpClient httpClient = HttpClients.custom()
+                .setConnectionManager(connectionManager)
+                .build()) {
 
-            // Disable hostname verification for self-signed cert
-            conn.setHostnameVerifier((hostname, session) -> true);
-
-            conn.connect();
-            int responseCode = conn.getResponseCode();
-            conn.disconnect();
+            HttpGet request = new HttpGet("https://localhost:" + port + "/api/data");
+            String response = httpClient.execute(request, httpResponse -> {
+                int statusCode = httpResponse.getCode();
+                String body = EntityUtils.toString(httpResponse.getEntity());
+                return "Status: " + statusCode + ", Body: " + body;
+            });
 
             // If we get here, the connection succeeded when it should have failed
-            fail("Standard Java TLS should have failed to connect to PQC-only server, but got response code: " + responseCode);
+            fail("Standard Java TLS should have failed to connect to PQC-only server, but got response: " + response);
 
         } catch (SSLHandshakeException e) {
             System.out.println("✓ Standard Java TLS connection FAILED as expected (handshake)");
