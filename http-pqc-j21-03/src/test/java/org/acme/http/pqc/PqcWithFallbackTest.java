@@ -60,15 +60,22 @@ class PqcWithFallbackTest {
      */
     public static class PqcWithFallbackProfile implements QuarkusTestProfile {
 
+        // Static block ensures property is set early
         static {
-            // Set system property before Quarkus application starts
-            // This is read by SecurityConfiguration.onStart()
             System.setProperty("pqc.named.groups", "X25519MLKEM768,secp256r1");
         }
 
         @Override
         public Map<String, String> getConfigOverrides() {
+            // Reinforce the property setting
+            System.setProperty("pqc.named.groups", "X25519MLKEM768,secp256r1");
             return Map.of();
+        }
+
+        @Override
+        public String getConfigProfile() {
+            // Ensure this test runs with its own isolated configuration
+            return "pqc-with-fallback";
         }
     }
 

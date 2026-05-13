@@ -20,6 +20,7 @@ import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.security.Provider;
 import java.security.Security;
+import java.util.Map;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -27,6 +28,8 @@ import javax.net.ssl.SSLSocket;
 import javax.net.ssl.TrustManagerFactory;
 
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.junit.QuarkusTestProfile;
+import io.quarkus.test.junit.TestProfile;
 import io.restassured.RestAssured;
 import io.restassured.response.Response;
 import org.junit.jupiter.api.Test;
@@ -48,7 +51,33 @@ import static org.junit.jupiter.api.Assumptions.assumeFalse;
  * Run with: mvn test -Dtest=StandardTlsFailsTest
  */
 @QuarkusTest
+@TestProfile(StandardTlsFailsTest.PqcOnlyProfile.class)
 class StandardTlsFailsTest {
+
+    /**
+     * Test profile that configures server with X25519MLKEM768 ONLY.
+     * Sets system property BEFORE application startup.
+     */
+    public static class PqcOnlyProfile implements QuarkusTestProfile {
+
+        // Static block ensures property is set early
+        static {
+            System.setProperty("pqc.named.groups", "X25519MLKEM768");
+        }
+
+        @Override
+        public Map<String, String> getConfigOverrides() {
+            // Reinforce the property setting
+            System.setProperty("pqc.named.groups", "X25519MLKEM768");
+            return Map.of();
+        }
+
+        @Override
+        public String getConfigProfile() {
+            // Ensure this test runs with its own isolated configuration
+            return "pqc-only-standard-tls";
+        }
+    }
 
     @Test
     void testSunJsseFailsWithPqcOnly() throws Exception {
