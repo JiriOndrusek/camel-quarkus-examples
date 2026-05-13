@@ -16,12 +16,12 @@
  */
 package org.acme.http.pqc;
 
-import java.util.Map;
-
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.QuarkusTestProfile;
 import io.quarkus.test.junit.TestProfile;
 import io.restassured.RestAssured;
+import io.restassured.config.RestAssuredConfig;
+import io.restassured.config.SSLConfig;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
@@ -44,13 +44,6 @@ class PqcWithFallbackTest {
         @Override
         public String getConfigProfile() {
             return "pqc-with-fallback";
-        }
-
-        @Override
-        public Map<String, String> getConfigOverrides() {
-            return Map.of(
-                    // Disable client auth requirement for simpler testing
-                    "quarkus.http.ssl.client-auth", "none");
         }
     }
 
@@ -76,7 +69,11 @@ class PqcWithFallbackTest {
         int port = RestAssured.port > 0 ? RestAssured.port : 8443;
 
         given()
-                .relaxedHTTPSValidation()
+                .config(RestAssuredConfig.config().sslConfig(
+                        SSLConfig.sslConfig()
+                                .keyStore("target/certs/client-keystore.p12", "changeit")
+                                .trustStore("target/certs/client-truststore.p12", "changeit")
+                                .allowAllHostnames()))
                 .baseUri("https://localhost:" + port)
                 .when()
                 .get("/api/data")
