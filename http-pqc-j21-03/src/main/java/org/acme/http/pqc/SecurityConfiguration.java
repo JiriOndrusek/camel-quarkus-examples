@@ -61,10 +61,9 @@ public class SecurityConfiguration {
                 System.setProperty("jdk.tls.namedGroups", configuredGroups);
                 LOG.info("Configured TLS named groups from pqc.named.groups: " + configuredGroups);
             } else {
-                // Enable X25519MLKEM768 along with standard groups for compatibility
-                System.setProperty("jdk.tls.namedGroups",
-                        "X25519MLKEM768,secp256r1,secp384r1,secp521r1");
-                LOG.info("Configured TLS named groups for PQC: X25519MLKEM768,secp256r1,secp384r1,secp521r1");
+                // DEFAULT: X25519MLKEM768 ONLY (no fallback for strict PQC enforcement)
+                System.setProperty("jdk.tls.namedGroups", "X25519MLKEM768");
+                LOG.info("Configured TLS named groups for PQC: X25519MLKEM768 ONLY (no fallback)");
             }
         } else {
             LOG.info("TLS named groups already configured: " + namedGroups);
