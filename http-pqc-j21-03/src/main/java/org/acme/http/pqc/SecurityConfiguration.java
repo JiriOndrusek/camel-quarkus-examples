@@ -67,7 +67,11 @@ public class SecurityConfiguration {
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
         }
 
-        // Remove existing BC providers to ensure clean state for each test
+        // Remove existing providers to ensure clean state for each test
+        if (Security.getProvider("DefaultSecureRandom") != null) {
+            Security.removeProvider("DefaultSecureRandom");
+            LOG.info("Removed existing DefaultSecureRandomProvider");
+        }
         if (Security.getProvider("BCJSSE") != null) {
             Security.removeProvider("BCJSSE");
             LOG.info("Removed existing BouncyCastleJsseProvider");
@@ -77,21 +81,25 @@ public class SecurityConfiguration {
             LOG.info("Removed existing BouncyCastleProvider");
         }
 
+        // CRITICAL for native mode: Register custom provider that provides "DEFAULT" SecureRandom.
+        // BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT") during SSL context
+        // initialization, but in GraalVM native images no provider registers this algorithm.
+        // Register at high priority so it's found before other providers.
+        Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
+        LOG.info("Registered DefaultSecureRandomProvider for DEFAULT SecureRandom algorithm");
+
         // Register BC at the end (low priority) so BCJSSE can use it
         // for key conversion, while JDK's SUN/SunJCE remain the preferred
         // providers for PKCS12 KeyStore and PBE algorithms.
         Security.addProvider(new BouncyCastleProvider());
         LOG.info("Registered BouncyCastleProvider at end of provider list");
 
-        // Register BCJSSE at position 1 for TLS.
-        // BCJSSE will find BC from the global provider list.
-        Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
-        LOG.info("Registered BouncyCastleJsseProvider at position 1");
+        // Register BCJSSE at position 2 for TLS (after DefaultSecureRandom provider).
+        // BCJSSE will now be able to call SecureRandom.getInstance("DEFAULT") successfully.
+        Security.insertProviderAt(new BouncyCastleJsseProvider(), 2);
+        LOG.info("Registered BouncyCastleJsseProvider at position 2");
 
-        // CRITICAL for native mode: BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT")
-        // but in native images, no provider registers "DEFAULT" as an algorithm.
-        // Solution: Provide SecureRandom directly to BouncyCastle's CryptoServicesRegistrar
-        // MUST be done AFTER BCJSSE provider is registered!
+        // Pre-initialize SecureRandom and register with CryptoServicesRegistrar
         SecureRandom sr = new SecureRandom();
         sr.nextBytes(new byte[1]);
         org.bouncycastle.crypto.CryptoServicesRegistrar.setSecureRandom(sr);
