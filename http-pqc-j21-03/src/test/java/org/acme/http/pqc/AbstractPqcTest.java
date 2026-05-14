@@ -90,7 +90,8 @@ abstract class AbstractPqcTest {
                     fail(securityProvider + " should have failed but got: " + response);
                 }
             }
-        } catch (NoClassDefFoundError | ExceptionInInitializerError | javax.net.ssl.SSLHandshakeException e) {
+        } catch (NoClassDefFoundError | ExceptionInInitializerError | javax.net.ssl.SSLHandshakeException
+                | org.apache.hc.client5.http.HttpHostConnectException e) {
             if (expectFailure) {
                 failedAsExpected = true;
             } else {

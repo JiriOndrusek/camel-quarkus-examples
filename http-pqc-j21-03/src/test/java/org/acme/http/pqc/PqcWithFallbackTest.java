@@ -19,11 +19,25 @@ package org.acme.http.pqc;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import org.acme.http.pqc.profiles.PqcWithFallbackProfile;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
+/**
+ * Test Apache HTTP Client with PQC+fallback configuration.
+ *
+ * Expected results:
+ * - BCJSSE: SUCCESS (supports X25519MLKEM768 and fallback)
+ * - SunJSSE: SUCCESS (ignores X25519MLKEM768, uses secp256r1 fallback)
+ *
+ * Note: @Order(1) ensures this test runs BEFORE PqcOnlyTest.
+ * This test must run first because SunJSSE can successfully initialize with the fallback
+ * configuration. If the PQC-only test runs first, SunJSSE's static initialization fails
+ * permanently and cannot be recovered.
+ */
 @QuarkusTest
 @TestProfile(PqcWithFallbackProfile.class)
-class HttpClientPqcWithFallbackTest extends AbstractPqcTest {
+@Order(1)
+class PqcWithFallbackTest extends AbstractPqcTest {
 
     @Test
     void testRestAssured() throws Exception {

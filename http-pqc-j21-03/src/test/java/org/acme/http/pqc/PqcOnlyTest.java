@@ -19,6 +19,7 @@ package org.acme.http.pqc;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import org.acme.http.pqc.profiles.PqcOnlyProfile;
+import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
 /**
@@ -30,11 +31,14 @@ import org.junit.jupiter.api.Test;
  *
  * This proves that X25519MLKEM768 requires BouncyCastle JSSE.
  *
- * Run with: mvn test -Dtest=HttpClientPqcOnlyTest
+ * Note: @Order(2) ensures this test runs AFTER PqcWithFallbackTest.
+ * SunJSSE's static initialization fails with PQC-only config and permanently marks the
+ * class as failed. The fallback test must run first to validate SunJSSE works with classical algorithms.
  */
 @QuarkusTest
 @TestProfile(PqcOnlyProfile.class)
-class HttpClientPqcOnlyTest extends AbstractPqcTest {
+@Order(2)
+class PqcOnlyTest extends AbstractPqcTest {
 
     @Test
     void testRestAssured() throws Exception {
