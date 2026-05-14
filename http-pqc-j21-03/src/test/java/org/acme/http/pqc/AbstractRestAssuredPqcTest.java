@@ -16,52 +16,46 @@
  */
 package org.acme.http.pqc;
 
-import io.quarkus.test.junit.QuarkusTest;
-import io.quarkus.test.junit.QuarkusTestProfile;
-import io.quarkus.test.junit.TestProfile;
 import io.restassured.RestAssured;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.config.SSLConfig;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * Test 1: HTTP endpoint with X25519MLKEM768-only server.
- *
- * Server is configured with ONLY X25519MLKEM768 (no fallback).
- * Default provider (BCJSSE) supports PQC and request should succeed.
- *
- * Run with: mvn test -Dtest=PqcOnlyBcjsseTest
+ * Abstract base class for RestAssured PQC tests.
+ * RestAssured uses BCJSSE which supports PQC, so all tests succeed.
  */
-@QuarkusTest
-@TestProfile(PqcOnlyBcjsseTest.PqcOnlyProfile.class)
-class PqcOnlyBcjsseTest {
+abstract class AbstractRestAssuredPqcTest {
 
-    public static class PqcOnlyProfile implements QuarkusTestProfile {
+    /**
+     * Returns the expected named groups configuration for this test.
+     */
+    protected abstract String getExpectedNamedGroups();
 
-        @Override
-        public String getConfigProfile() {
-            return "pqc-only";
-        }
-    }
+    /**
+     * Returns the test description for console output.
+     */
+    protected abstract String getTestDescription();
+
+    /**
+     * Validates the named groups configuration.
+     */
+    protected abstract void validateNamedGroups(String actualNamedGroups);
 
     @Test
-    void testHttpRequestWithPqcOnly() {
+    void testRestAssuredWithPqc() {
         String actualNamedGroups = System.getProperty("jdk.tls.namedGroups");
 
         System.out.println("\n═══════════════════════════════════════════════════════════");
-        System.out.println("   Test 1: HTTP Request (X25519MLKEM768-Only)");
+        System.out.println("   " + getTestDescription());
         System.out.println("═══════════════════════════════════════════════════════════");
-        System.out.println("Server named groups: " + actualNamedGroups);
+        System.out.println("Server: " + actualNamedGroups);
+        System.out.println("Client: RestAssured (BCJSSE)");
         System.out.println();
 
-        assertTrue(actualNamedGroups != null && actualNamedGroups.equals("X25519MLKEM768"),
-                "Server must be configured with ONLY X25519MLKEM768. Got: " + actualNamedGroups);
-
-        System.out.println("✓ Server configuration verified: X25519MLKEM768 ONLY");
-        System.out.println();
+        validateNamedGroups(actualNamedGroups);
 
         int port = RestAssured.port > 0 ? RestAssured.port : 8443;
 
@@ -77,7 +71,7 @@ class PqcOnlyBcjsseTest {
                 .then()
                 .statusCode(200);
 
-        System.out.println("✓ HTTP request SUCCEEDED");
+        System.out.println("✓ SUCCESS - BCJSSE negotiated " + getExpectedNamedGroups());
         System.out.println("═══════════════════════════════════════════════════════════\n");
     }
 }
