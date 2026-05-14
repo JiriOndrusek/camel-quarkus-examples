@@ -24,6 +24,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 @DefaultBean
@@ -66,21 +67,12 @@ public class SecurityConfiguration {
 
         // Configure JSSE to enable PQC hybrid key exchange algorithms
         // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
-        String namedGroups = System.getProperty("jdk.tls.namedGroups");
-        if (namedGroups == null || namedGroups.isEmpty()) {
-            // Check if overridden by config (for testing)
-            String configuredGroups = System.getProperty("pqc.named.groups");
-            if (configuredGroups != null && !configuredGroups.isEmpty()) {
-                System.setProperty("jdk.tls.namedGroups", configuredGroups);
-                LOG.info("Configured TLS named groups from pqc.named.groups: " + configuredGroups);
-            } else {
-                // DEFAULT: X25519MLKEM768 ONLY (no fallback for strict PQC enforcement)
-                System.setProperty("jdk.tls.namedGroups", "X25519MLKEM768");
-                LOG.info("Configured TLS named groups for PQC: X25519MLKEM768 ONLY (no fallback)");
-            }
-        } else {
-            LOG.info("TLS named groups already configured: " + namedGroups);
-        }
+        // Read from configuration (supports profile-specific overrides for testing)
+        String configuredGroups = ConfigProvider.getConfig()
+                .getOptionalValue("pqc.tls.named.groups", String.class)
+                .orElse("X25519MLKEM768");
+        System.setProperty("jdk.tls.namedGroups", configuredGroups);
+        LOG.info("Configured TLS named groups for PQC: " + configuredGroups);
 
         LOG.info("BouncyCastle JSSE provider registered for PQC TLS support");
         LOG.info("Provider: " + Security.getProvider("BCJSSE").getInfo());
