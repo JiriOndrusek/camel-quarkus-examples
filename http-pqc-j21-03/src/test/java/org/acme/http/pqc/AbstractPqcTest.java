@@ -23,6 +23,7 @@ import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
 import javax.net.ssl.TrustManagerFactory;
 
+import io.quarkus.test.common.QuarkusTestResource;
 import io.restassured.RestAssured;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.config.SSLConfig;
@@ -41,7 +42,10 @@ import static org.junit.jupiter.api.Assertions.fail;
 /**
  * Abstract base class for Apache HttpClient PQC tests with explicit provider selection.
  * Tests both BCJSSE (PQC-capable) and SunJSSE (classical only) providers.
+ *
+ * Certificates are generated before tests via CertificateTestResource.
  */
+@QuarkusTestResource(CertificateTestResource.class)
 abstract class AbstractPqcTest {
 
     void testRestAssuredConnection() {
@@ -55,7 +59,7 @@ abstract class AbstractPqcTest {
                                 .allowAllHostnames()))
                 .baseUri("https://localhost:" + port)
                 .when()
-                .get("/api/data")
+                .get("/pqc/secure")
                 .then()
                 .statusCode(200);
     }

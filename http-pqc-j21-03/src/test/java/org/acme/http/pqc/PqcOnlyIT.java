@@ -17,11 +17,18 @@
 package org.acme.http.pqc;
 
 import io.quarkus.test.junit.QuarkusIntegrationTest;
+import org.junit.jupiter.api.Order;
 
 /**
  * Native integration test for PqcOnlyTest.
  * Runs the same tests as PqcOnlyTest but against the native binary.
+ *
+ * Note: @Order(2) ensures this test runs AFTER PqcWithFallbackIT.
+ * BC providers are registered by CertificateTestResource (inherited from AbstractPqcTest).
+ *
+ * Run with: mvn verify -Dnative
  */
 @QuarkusIntegrationTest
+@Order(2)
 class PqcOnlyIT extends PqcOnlyTest {
 }

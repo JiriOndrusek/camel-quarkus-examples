@@ -17,62 +17,33 @@
 package org.acme.http.pqc;
 
 import jakarta.enterprise.context.ApplicationScoped;
-import jakarta.inject.Inject;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
-import org.apache.camel.model.dataformat.JsonLibrary;
 
 /**
- * Camel routes based on oscerd/camel-pqc-tls example.
+ * Camel routes demonstrating Post-Quantum Cryptography (PQC) with TLS 1.3.
+ * Based on oscerd/camel-pqc-tls example.
  * Source:
  * https://github.com/oscerd/camel-pqc-tls/blob/main/pqc-ssl-context-jdk21/src/main/resources/camel/pqc-ssl-context.camel.yaml
  */
 @ApplicationScoped
 public class PqcCamelRoute extends EndpointRouteBuilder {
 
-    @Inject
-    PqcVerificationService pqcVerificationService;
+    private static final String SECURE_RESPONSE = "Secure data delivered via Post-Quantum Cryptography (PQC)!\n\n" +
+            "Connection details:\n" +
+            "- TLS version: 1.3\n" +
+            "- Key exchange: X25519MLKEM768 (hybrid PQC)\n" +
+            "- Provider: BouncyCastle JSSE\n\n" +
+            "This connection combines classical X25519 ECDH with quantum-resistant ML-KEM-768,\n" +
+            "providing security against both classical and quantum computing attacks.";
 
     @Override
     public void configure() throws Exception {
-        // Startup verification route - performs PQC configuration check on startup
-        // Equivalent to 'pqc-verify' route in oscerd YAML
-        from(timer("pqc-verify").repeatCount(1))
-                .routeId("pqc-startup-verification")
-                .log("Starting PQC configuration verification...")
-                .bean(pqcVerificationService, "verifyPqcConfiguration")
-                .log("PQC verification result: ${body}")
-                .choice()
-                .when(simple("${body[pqc_ready]} == true"))
-                .log("✓ PQC TLS configuration is READY")
-                .otherwise()
-                .log("⚠ WARNING: PQC TLS configuration is NOT READY - ${body[verification_status]}")
-                .endChoice();
-
-        // API endpoint for secure data
-        // Equivalent to 'pqc-secure-server' route in oscerd YAML
-        from(platformHttp("/api/data"))
-                .routeId("pqc-api-data")
-                .log("Serving secure data via PQC-enabled TLS")
-                .bean(pqcVerificationService, "getSecureData")
-                .marshal().json(JsonLibrary.Jackson)
-                .setHeader("Content-Type", constant("application/json"));
-
-        // API endpoint for on-demand PQC verification
-        // Equivalent to 'pqc-verify-endpoint' route in oscerd YAML
-        from(platformHttp("/api/verify-pqc"))
-                .routeId("pqc-api-verify")
-                .log("Performing on-demand PQC verification")
-                .bean(pqcVerificationService, "verifyPqcConfiguration")
-                .marshal().json(JsonLibrary.Jackson)
-                .setHeader("Content-Type", constant("application/json"));
-
-        // API endpoint for SSL/TLS system information
-        // Equivalent to 'pqc-ssl-info' route in oscerd YAML
-        from(platformHttp("/api/ssl-info"))
-                .routeId("pqc-api-ssl-info")
-                .log("Providing SSL/TLS system information")
-                .bean(pqcVerificationService, "getSslInfo")
-                .marshal().json(JsonLibrary.Jackson)
-                .setHeader("Content-Type", constant("application/json"));
+        // API endpoint for secure data delivery over PQC-enabled TLS
+        // Client certificates are validated at TLS layer (quarkus.http.ssl.client-auth=required)
+        from(platformHttp("/pqc/secure"))
+                .routeId("pqc-secure")
+                .log("Serving secure data via PQC-enabled TLS connection")
+                .setBody(constant(SECURE_RESPONSE))
+                .setHeader("Content-Type", constant("text/plain; charset=utf-8"));
     }
 }
