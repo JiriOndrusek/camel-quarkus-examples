@@ -88,6 +88,15 @@ public class SecurityConfiguration {
         Security.insertProviderAt(new BouncyCastleJsseProvider(), 1);
         LOG.info("Registered BouncyCastleJsseProvider at position 1");
 
+        // CRITICAL for native mode: BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT")
+        // but in native images, no provider registers "DEFAULT" as an algorithm.
+        // Solution: Provide SecureRandom directly to BouncyCastle's CryptoServicesRegistrar
+        // MUST be done AFTER BCJSSE provider is registered!
+        SecureRandom sr = new SecureRandom();
+        sr.nextBytes(new byte[1]);
+        org.bouncycastle.crypto.CryptoServicesRegistrar.setSecureRandom(sr);
+        LOG.info("Registered SecureRandom with BouncyCastle CryptoServicesRegistrar");
+
         // Configure JSSE to enable PQC hybrid key exchange algorithms
         // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
         // Read from configuration (supports profile-specific overrides for testing)
