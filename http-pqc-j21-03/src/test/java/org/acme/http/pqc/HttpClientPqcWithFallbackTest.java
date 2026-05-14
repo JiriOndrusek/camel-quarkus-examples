@@ -18,45 +18,25 @@ package org.acme.http.pqc;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
+import org.acme.http.pqc.profiles.PqcWithFallbackProfile;
+import org.junit.jupiter.api.Test;
 
-import static org.junit.jupiter.api.Assertions.assertTrue;
-
-/**
- * Test Apache HTTP Client with explicit provider selection on PQC + fallback server.
- *
- * Expected results:
- * - BCJSSE: SUCCESS (negotiates X25519MLKEM768)
- * - SunJSSE: FAILURE (cannot parse X25519MLKEM768 even with fallback)
- *
- * This demonstrates that SunJSSE cannot handle PQC algorithms in jdk.tls.namedGroups.
- *
- * Run with: mvn test -Dtest=HttpClientPqcWithFallbackTest
- */
 @QuarkusTest
 @TestProfile(PqcWithFallbackProfile.class)
-class HttpClientPqcWithFallbackTest extends AbstractHttpClientPqcTest {
+class HttpClientPqcWithFallbackTest extends AbstractPqcTest {
 
-    @Override
-    protected String getBcjsseTestDescription() {
-        return "HttpClient BCJSSE with PQC + Fallback Server";
+    @Test
+    void testRestAssured() throws Exception {
+        testRestAssuredConnection();
     }
 
-    @Override
-    protected String getSunJsseTestDescription() {
-        return "HttpClient SunJSSE FAILS with PQC + Fallback Server";
+    @Test
+    void testHttpClientWithBCJSSE() throws Exception {
+        testHttpClientConnection("BCJSSE", false);
     }
 
-    @Override
-    protected void validateNamedGroups(String actualNamedGroups) {
-        assertTrue(
-                actualNamedGroups != null && actualNamedGroups.contains("X25519MLKEM768")
-                        && actualNamedGroups.contains("secp256r1"),
-                "Server must be configured with X25519MLKEM768,secp256r1. Got: " + actualNamedGroups);
-    }
-
-    @Override
-    protected String getSunJsseFailureNote() {
-        return "Note: SunJSSE fails even with fallback algorithms present\n" +
-                "      because it cannot parse X25519MLKEM768";
+    @Test
+    void testHttpClientWithSunJSSE() throws Exception {
+        testHttpClientConnection("SunJSSE", false);
     }
 }

@@ -18,8 +18,8 @@ package org.acme.http.pqc;
 
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
-
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.acme.http.pqc.profiles.PqcOnlyProfile;
+import org.junit.jupiter.api.Test;
 
 /**
  * Test Apache HTTP Client with explicit provider selection on PQC-only server.
@@ -34,21 +34,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  */
 @QuarkusTest
 @TestProfile(PqcOnlyProfile.class)
-class HttpClientPqcOnlyTest extends AbstractHttpClientPqcTest {
+class HttpClientPqcOnlyTest extends AbstractPqcTest {
 
-    @Override
-    protected String getBcjsseTestDescription() {
-        return "HttpClient BCJSSE with PQC-Only Server";
+    @Test
+    void testRestAssured() throws Exception {
+        testRestAssuredConnection();
     }
 
-    @Override
-    protected String getSunJsseTestDescription() {
-        return "HttpClient SunJSSE FAILS with PQC-Only Server";
+    @Test
+    void testHttpClientWithBCJSSE() throws Exception {
+        testHttpClientConnection("BCJSSE", false);
     }
 
-    @Override
-    protected void validateNamedGroups(String actualNamedGroups) {
-        assertTrue(actualNamedGroups != null && actualNamedGroups.equals("X25519MLKEM768"),
-                "Server must be configured with X25519MLKEM768. Got: " + actualNamedGroups);
+    @Test
+    void testHttpClientWithSunJSSE() throws Exception {
+        testHttpClientConnection("SunJSSE", true);
     }
 }
