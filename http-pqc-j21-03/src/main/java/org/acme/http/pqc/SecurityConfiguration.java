@@ -34,14 +34,29 @@ public class SecurityConfiguration {
 
     private static final Logger LOG = Logger.getLogger(SecurityConfiguration.class);
 
-    void onStart(@Observes StartupEvent ev) {
-        // Initialize SecureRandom for BouncyCastle JSSE in native mode.
-        // Native images may not have the default SecureRandom provider available,
-        // which causes "DEFAULT SecureRandom not available" errors in BCJSSE.
-        // Creating an instance early ensures the infrastructure is initialized.
-        new SecureRandom().nextBytes(new byte[1]);
-        LOG.info("Initialized SecureRandom for BouncyCastle JSSE");
+    // Static initializer to ensure SecureRandom is available BEFORE Quarkus/Vertx
+    // initializes SSL context. This is critical for native mode where BouncyCastle
+    // JSSE needs SecureRandom during SSL context creation.
+    //
+    // Configure securerandom.source to use /dev/urandom for faster initialization
+    // in containerized environments while maintaining sufficient entropy.
+    static {
+        try {
+            // Set SecureRandom source before any initialization
+            // Use file:/dev/urandom instead of file:/dev/random to avoid blocking
+            Security.setProperty("securerandom.source", "file:/dev/urandom");
 
+            // Pre-initialize SecureRandom to ensure it's available for BouncyCastle JSSE
+            SecureRandom sr = new SecureRandom();
+            sr.nextBytes(new byte[1]);
+            LOG.info("Static initialization: SecureRandom pre-initialized with /dev/urandom source");
+        } catch (Exception e) {
+            LOG.error("Failed to initialize SecureRandom in static block", e);
+            throw new ExceptionInInitializerError(e);
+        }
+    }
+
+    void onStart(@Observes StartupEvent ev) {
         // Remove ECDH from jdk.tls.disabledAlgorithms.
         // JDK 21 disables raw "ECDH" which BCJSSE interprets broadly,
         // preventing EC credentials from being used in TLS handshakes.
