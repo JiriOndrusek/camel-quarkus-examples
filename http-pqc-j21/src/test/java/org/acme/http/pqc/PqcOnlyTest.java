@@ -19,6 +19,7 @@ package org.acme.http.pqc;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import org.acme.http.pqc.profiles.PqcOnlyProfile;
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
@@ -40,18 +41,19 @@ import org.junit.jupiter.api.Test;
 @Order(2)
 class PqcOnlyTest extends AbstractPqcTest {
 
-    //    @Test
-    //    void testRestAssured() throws Exception {
-    //        testRestAssuredConnection();
-    //    }
+    @Test
+    void testRestAssured() throws Exception {
+        testRestAssuredConnection();
+    }
 
     @Test
     void testHttpClientWithBCJSSE() throws Exception {
         testHttpClientConnection("BCJSSE", false);
     }
 
-    //    @Test
-    //    void testHttpClientWithSunJSSE() throws Exception {
-    //        testHttpClientConnection("SunJSSE", true);
-    //    }
+    @Disabled //todo why it fails in native????
+    @Test
+    void testHttpClientWithSunJSSE() throws Exception {
+        testHttpClientConnection("SunJSSE", true);
+    }
 }
