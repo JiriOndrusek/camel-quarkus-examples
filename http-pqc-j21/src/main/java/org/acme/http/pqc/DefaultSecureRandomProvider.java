@@ -45,7 +45,6 @@ public class DefaultSecureRandomProvider extends Provider {
 
         private final SecureRandom delegate;
 
-
         public DefaultSecureRandomSpi() {
             try {
                 // Try platform-specific implementations to avoid recursion

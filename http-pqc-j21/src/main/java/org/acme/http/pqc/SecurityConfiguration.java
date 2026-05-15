@@ -84,6 +84,13 @@ public class SecurityConfiguration {
     //    }
 
     void onStart(@Observes StartupEvent ev) {
+        LOG.info("SecurityConfiguration.onStart() - classLoader: " + this.getClass().getClassLoader());
+        LOG.info("SecurityConfiguration.onStart() - thread classLoader: " + Thread.currentThread().getContextClassLoader());
+
+        // Detect if running in native mode
+        boolean isNative = "executable".equals(System.getProperty("org.graalvm.nativeimage.kind"));
+        LOG.info("Running in native mode: " + isNative);
+
         // Remove ECDH from jdk.tls.disabledAlgorithms.
         // JDK 21 disables raw "ECDH" which BCJSSE interprets broadly,
         // preventing EC credentials from being used in TLS handshakes.
@@ -94,37 +101,60 @@ public class SecurityConfiguration {
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
         }
 
-        // Remove existing providers to ensure clean state for each test
-        if (Security.getProvider("DefaultSecureRandom") != null) {
-            Security.removeProvider("DefaultSecureRandom");
-            LOG.info("Removed existing DefaultSecureRandomProvider");
-        }
-        if (Security.getProvider("BCJSSE") != null) {
-            Security.removeProvider("BCJSSE");
-            LOG.info("Removed existing BouncyCastleJsseProvider");
-        }
-        if (Security.getProvider("BC") != null) {
-            Security.removeProvider("BC");
-            LOG.info("Removed existing BouncyCastleProvider");
+        if (isNative) {
+            // In native mode, providers are already registered at build time via -H:AdditionalSecurityProviders
+            // We cannot remove and re-register them. Just verify they're present.
+            LOG.info("Native mode: Verifying build-time registered providers");
+            LOG.info("BC provider: " + Security.getProvider("BC"));
+            LOG.info("BCJSSE provider: " + Security.getProvider("BCJSSE"));
+            LOG.info("DefaultSecureRandom provider: " + Security.getProvider("DefaultSecureRandom"));
+        } else {
+            // JVM mode: Remove existing providers to ensure clean state for each test
+            if (Security.getProvider("DefaultSecureRandom") != null) {
+                Security.removeProvider("DefaultSecureRandom");
+                LOG.info("Removed existing DefaultSecureRandomProvider");
+            }
+            if (Security.getProvider("BCJSSE") != null) {
+                Security.removeProvider("BCJSSE");
+                LOG.info("Removed existing BouncyCastleJsseProvider");
+            }
+            if (Security.getProvider("BC") != null) {
+                Security.removeProvider("BC");
+                LOG.info("Removed existing BouncyCastleProvider");
+            }
+
+            // CRITICAL for native mode: Register custom provider that provides "DEFAULT" SecureRandom.
+            // BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT") during SSL context
+            // initialization, but in GraalVM native images no provider registers this algorithm.
+            // Register at high priority so it's found before other providers.
+            Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
+            LOG.info("Registered DefaultSecureRandomProvider for DEFAULT SecureRandom algorithm");
+
+            // Register BC at the end (low priority) so BCJSSE can use it
+            // for key conversion, while JDK's SUN/SunJCE remain the preferred
+            // providers for PKCS12 KeyStore and PBE algorithms.
+            Security.addProvider(new BouncyCastleProvider());
+            LOG.info("Registered BouncyCastleProvider at end of provider list");
+
+            // Register BCJSSE at position 2 for TLS (after DefaultSecureRandom provider).
+            // BCJSSE will now be able to call SecureRandom.getInstance("DEFAULT") successfully.
+            Security.insertProviderAt(new BouncyCastleJsseProvider(), 2);
+            LOG.info("Registered BouncyCastleJsseProvider at position 2");
         }
 
-        // CRITICAL for native mode: Register custom provider that provides "DEFAULT" SecureRandom.
-        // BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT") during SSL context
-        // initialization, but in GraalVM native images no provider registers this algorithm.
-        // Register at high priority so it's found before other providers.
-        Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
-        LOG.info("Registered DefaultSecureRandomProvider for DEFAULT SecureRandom algorithm");
-
-        // Register BC at the end (low priority) so BCJSSE can use it
-        // for key conversion, while JDK's SUN/SunJCE remain the preferred
-        // providers for PKCS12 KeyStore and PBE algorithms.
-        Security.addProvider(new BouncyCastleProvider());
-        LOG.info("Registered BouncyCastleProvider at end of provider list");
-
-        // Register BCJSSE at position 2 for TLS (after DefaultSecureRandom provider).
-        // BCJSSE will now be able to call SecureRandom.getInstance("DEFAULT") successfully.
-        Security.insertProviderAt(new BouncyCastleJsseProvider(), 2);
-        LOG.info("Registered BouncyCastleJsseProvider at position 2");
+        if (!isNative) {
+            // JVM mode: Pre-warm ChaCha20-Poly1305 cipher support.
+            // In native mode, calling Cipher.getInstance() on vert.x event loop threads during
+            // TLS handshakes can block/hang. By creating ciphers here on the main thread during
+            // startup, we ensure the JCA provider caches are populated before any handshakes occur.
+            try {
+                javax.crypto.Cipher.getInstance("ChaCha7539", "BC");
+                javax.crypto.Mac.getInstance("Poly1305", "BC");
+                LOG.info("Pre-warmed ChaCha20-Poly1305 cipher/MAC support");
+            } catch (Exception e) {
+                LOG.warn("Failed to pre-warm ChaCha20-Poly1305", e);
+            }
+        }
 
     }
 }

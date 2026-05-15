@@ -73,7 +73,7 @@ public class CertificateTestResource implements QuarkusTestResourceLifecycleMana
 
         // Enable SSL debugging for detailed handshake logging
         // Uncomment to see full TLS handshake details including cipher suites
-        System.setProperty("javax.net.debug", "ssl:handshake:verbose");
+        //        System.setProperty("javax.net.debug", "ssl:handshake:verbose");
 
         try {
             LOG.info("Generating PQC-ready certificates for tests...");
