@@ -29,6 +29,5 @@ import org.junit.jupiter.api.Order;
  * Run with: mvn verify -Dnative
  */
 @QuarkusIntegrationTest
-@Order(2)
 class PqcOnlyIT extends PqcOnlyTest {
 }

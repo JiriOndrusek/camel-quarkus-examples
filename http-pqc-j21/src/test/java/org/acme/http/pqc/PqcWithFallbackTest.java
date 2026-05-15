@@ -50,7 +50,7 @@ class PqcWithFallbackTest extends AbstractPqcTest {
         testHttpClientConnection("BCJSSE", false);
     }
 
-    @Disabled //todo why it fails????
+    @Disabled //why it fails in jvm????
     @Test
     void testHttpClientWithSunJSSE() throws Exception {
         testHttpClientConnection("SunJSSE", false);

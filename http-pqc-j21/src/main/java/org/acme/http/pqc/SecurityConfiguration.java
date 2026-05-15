@@ -141,20 +141,20 @@ public class SecurityConfiguration {
             Security.insertProviderAt(new BouncyCastleJsseProvider(), 2);
             LOG.info("Registered BouncyCastleJsseProvider at position 2");
         }
-
-        if (!isNative) {
-            // JVM mode: Pre-warm ChaCha20-Poly1305 cipher support.
-            // In native mode, calling Cipher.getInstance() on vert.x event loop threads during
-            // TLS handshakes can block/hang. By creating ciphers here on the main thread during
-            // startup, we ensure the JCA provider caches are populated before any handshakes occur.
-            try {
-                javax.crypto.Cipher.getInstance("ChaCha7539", "BC");
-                javax.crypto.Mac.getInstance("Poly1305", "BC");
-                LOG.info("Pre-warmed ChaCha20-Poly1305 cipher/MAC support");
-            } catch (Exception e) {
-                LOG.warn("Failed to pre-warm ChaCha20-Poly1305", e);
-            }
-        }
+        //
+        //        if (!isNative) {
+        //            // JVM mode: Pre-warm ChaCha20-Poly1305 cipher support.
+        //            // In native mode, calling Cipher.getInstance() on vert.x event loop threads during
+        //            // TLS handshakes can block/hang. By creating ciphers here on the main thread during
+        //            // startup, we ensure the JCA provider caches are populated before any handshakes occur.
+        //            try {
+        //                javax.crypto.Cipher.getInstance("ChaCha7539", "BC");
+        //                javax.crypto.Mac.getInstance("Poly1305", "BC");
+        //                LOG.info("Pre-warmed ChaCha20-Poly1305 cipher/MAC support");
+        //            } catch (Exception e) {
+        //                LOG.warn("Failed to pre-warm ChaCha20-Poly1305", e);
+        //            }
+        //        }
 
     }
 }

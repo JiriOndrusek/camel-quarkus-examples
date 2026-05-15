@@ -33,17 +33,6 @@ public class CertificateTestResource implements QuarkusTestResourceLifecycleMana
 
     @Override
     public Map<String, String> start() {
-        //        // Remove existing providers to ensure clean state
-        //        if (Security.getProvider("DefaultSecureRandom") != null) {
-        //            Security.removeProvider("DefaultSecureRandom");
-        //        }
-        //        if (Security.getProvider("BCJSSE") != null) {
-        //            Security.removeProvider("BCJSSE");
-        //        }
-        //        if (Security.getProvider("BC") != null) {
-        //            Security.removeProvider("BC");
-        //        }
-        //
         // Register DefaultSecureRandomProvider first (position 1)
         // This is needed for BCJSSE to work correctly
         Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
@@ -57,19 +46,6 @@ public class CertificateTestResource implements QuarkusTestResourceLifecycleMana
         //        // This makes it the default JSSE provider
         Security.insertProviderAt(new org.bouncycastle.jsse.provider.BouncyCastleJsseProvider(), 2);
         LOG.info("Registered BouncyCastleJsseProvider for PQC TLS in test client at position 2");
-        //
-        //        // Remove ECDH from jdk.tls.disabledAlgorithms for compatibility
-        //        String disabled = Security.getProperty("jdk.tls.disabledAlgorithms");
-        //        if (disabled != null && disabled.contains("ECDH")) {
-        //            disabled = disabled.replaceAll(",\\s*ECDH\\b", "");
-        //            Security.setProperty("jdk.tls.disabledAlgorithms", disabled);
-        //            LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for test client");
-        //        }
-        //
-        //        // Named groups are now configured via Maven failsafe plugin systemPropertyVariables
-        //        // (jdk.tls.namedGroups is set as a JVM argument before any classes are loaded)
-        //        String configuredGroups = System.getProperty("jdk.tls.namedGroups", "X25519MLKEM768");
-        //        LOG.info("Client-side TLS named groups (from JVM args): " + configuredGroups);
 
         // Enable SSL debugging for detailed handshake logging
         // Uncomment to see full TLS handshake details including cipher suites

@@ -25,7 +25,6 @@ import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.KeyStore;
 import java.security.SecureRandom;
-import java.security.Security;
 import java.security.cert.Certificate;
 import java.security.cert.X509Certificate;
 import java.util.Date;
@@ -36,7 +35,6 @@ import org.bouncycastle.asn1.x509.Extension;
 import org.bouncycastle.cert.X509v3CertificateBuilder;
 import org.bouncycastle.cert.jcajce.JcaX509CertificateConverter;
 import org.bouncycastle.cert.jcajce.JcaX509v3CertificateBuilder;
-import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.operator.ContentSigner;
 import org.bouncycastle.operator.jcajce.JcaContentSignerBuilder;
 import org.jboss.logging.Logger;
@@ -200,11 +198,11 @@ public class CertificateGenerator {
 
     public static void main(String[] args) {
         try {
-            // Register BouncyCastleProvider if not already registered
-            if (Security.getProvider("BC") == null) {
-                Security.addProvider(new BouncyCastleProvider());
-                LOG.info("Registered BouncyCastleProvider for certificate generation");
-            }
+            //            // Register BouncyCastleProvider if not already registered
+            //            if (Security.getProvider("BC") == null) {
+            //                Security.addProvider(new BouncyCastleProvider());
+            //                LOG.info("Registered BouncyCastleProvider for certificate generation");
+            //            }
 
             LOG.info("Generating PQC-ready certificates...");
             generateServerKeystore();
