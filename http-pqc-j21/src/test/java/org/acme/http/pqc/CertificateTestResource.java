@@ -33,10 +33,7 @@ public class CertificateTestResource implements QuarkusTestResourceLifecycleMana
 
     @Override
     public Map<String, String> start() {
-        // Register DefaultSecureRandomProvider first (position 1)
-        // This is needed for BCJSSE to work correctly
-        Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
-        LOG.info("Registered DefaultSecureRandomProvider for test client at position 1");
+
         //
         // Register BC provider for certificate operations (at the end)
         Security.addProvider(new BouncyCastleProvider());

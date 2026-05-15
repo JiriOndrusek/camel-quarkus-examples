@@ -32,57 +32,6 @@ public class SecurityConfiguration {
 
     private static final Logger LOG = Logger.getLogger(SecurityConfiguration.class);
 
-    //    // Static initializer to ensure SecureRandom is available BEFORE Quarkus/Vertx
-    //    // initializes SSL context. This is critical for native mode where BouncyCastle
-    //    // JSSE needs SecureRandom during SSL context creation.
-    //    //
-    //    // Configure securerandom.source to use /dev/urandom for faster initialization
-    //    // in containerized environments while maintaining sufficient entropy.
-    //    static {
-    //        try {
-    //            // Set SecureRandom source before any initialization
-    //            // Use file:/dev/urandom instead of file:/dev/random to avoid blocking
-    //            Security.setProperty("securerandom.source", "file:/dev/urandom");
-    //
-    //            // Pre-initialize SecureRandom to ensure it's available for BouncyCastle JSSE
-    //            SecureRandom sr = new SecureRandom();
-    //            sr.nextBytes(new byte[1]);
-    //            LOG.info("Static initialization: SecureRandom pre-initialized with /dev/urandom source");
-    //        } catch (Exception e) {
-    //            LOG.error("Failed to initialize SecureRandom in static block", e);
-    //            throw new ExceptionInInitializerError(e);
-    //        }
-    //    }
-    //
-    //    /**
-    //     * Check if a named group ID is known to work.
-    //     * Used by reflection-based workaround to force-enable groups in native mode.
-    //     */
-    //    private static boolean isKnownWorkingGroup(int namedGroup) {
-    //        switch (namedGroup) {
-    //        case 0x001D: // x25519
-    //        case 0x001E: // x448
-    //        case 0x0017: // secp256r1
-    //        case 0x0018: // secp384r1
-    //        case 0x0019: // secp521r1
-    //        case 0x0100: // ffdhe2048
-    //        case 0x0101: // ffdhe3072
-    //        case 0x0102: // ffdhe4096
-    //        case 0x0103: // ffdhe6144
-    //        case 0x0104: // ffdhe8192
-    //        case 0x0200: // MLKEM512
-    //        case 0x0201: // MLKEM768
-    //        case 0x0202: // MLKEM1024
-    //        case 0x11EB: // SecP256r1MLKEM768
-    //        case 0x11EC: // X25519MLKEM768
-    //        case 0x11ED: // SecP384r1MLKEM1024
-    //        case 0x11EE: // curveSM2MLKEM768
-    //            return true;
-    //        default:
-    //            return false;
-    //        }
-    //    }
-
     void onStart(@Observes StartupEvent ev) {
         LOG.info("SecurityConfiguration.onStart() - classLoader: " + this.getClass().getClassLoader());
         LOG.info("SecurityConfiguration.onStart() - thread classLoader: " + Thread.currentThread().getContextClassLoader());
@@ -110,10 +59,6 @@ public class SecurityConfiguration {
             LOG.info("DefaultSecureRandom provider: " + Security.getProvider("DefaultSecureRandom"));
         } else {
             // JVM mode: Remove existing providers to ensure clean state for each test
-            if (Security.getProvider("DefaultSecureRandom") != null) {
-                Security.removeProvider("DefaultSecureRandom");
-                LOG.info("Removed existing DefaultSecureRandomProvider");
-            }
             if (Security.getProvider("BCJSSE") != null) {
                 Security.removeProvider("BCJSSE");
                 LOG.info("Removed existing BouncyCastleJsseProvider");
@@ -122,13 +67,6 @@ public class SecurityConfiguration {
                 Security.removeProvider("BC");
                 LOG.info("Removed existing BouncyCastleProvider");
             }
-
-            // CRITICAL for native mode: Register custom provider that provides "DEFAULT" SecureRandom.
-            // BouncyCastle JSSE calls SecureRandom.getInstance("DEFAULT") during SSL context
-            // initialization, but in GraalVM native images no provider registers this algorithm.
-            // Register at high priority so it's found before other providers.
-            Security.insertProviderAt(new DefaultSecureRandomProvider(), 1);
-            LOG.info("Registered DefaultSecureRandomProvider for DEFAULT SecureRandom algorithm");
 
             // Register BC at the end (low priority) so BCJSSE can use it
             // for key conversion, while JDK's SUN/SunJCE remain the preferred
@@ -141,20 +79,5 @@ public class SecurityConfiguration {
             Security.insertProviderAt(new BouncyCastleJsseProvider(), 2);
             LOG.info("Registered BouncyCastleJsseProvider at position 2");
         }
-        //
-        //        if (!isNative) {
-        //            // JVM mode: Pre-warm ChaCha20-Poly1305 cipher support.
-        //            // In native mode, calling Cipher.getInstance() on vert.x event loop threads during
-        //            // TLS handshakes can block/hang. By creating ciphers here on the main thread during
-        //            // startup, we ensure the JCA provider caches are populated before any handshakes occur.
-        //            try {
-        //                javax.crypto.Cipher.getInstance("ChaCha7539", "BC");
-        //                javax.crypto.Mac.getInstance("Poly1305", "BC");
-        //                LOG.info("Pre-warmed ChaCha20-Poly1305 cipher/MAC support");
-        //            } catch (Exception e) {
-        //                LOG.warn("Failed to pre-warm ChaCha20-Poly1305", e);
-        //            }
-        //        }
-
     }
 }

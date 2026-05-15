@@ -121,7 +121,6 @@ abstract class AbstractPqcTest {
                     return "Status: " + statusCode;
                 });
 
-                System.out.println(">>>>> respinse: " + response);
                 //todo better assertion of failure
                 if (expectFailure) {
                     if (response.contains("404")) {
