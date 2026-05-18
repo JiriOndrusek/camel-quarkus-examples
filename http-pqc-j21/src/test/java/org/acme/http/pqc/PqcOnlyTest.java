@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
  * Note: @Order(2) ensures this test runs AFTER PqcWithFallbackTest.
  * SunJSSE's static initialization fails with PQC-only config and permanently marks the
  * class as failed. The fallback test must run first to validate SunJSSE works with classical algorithms.
+ *
+ * This test doesn't have a native *IT child, because the native executable can be build only with 1 configuration.
  */
 @QuarkusTest
 @TestProfile(PqcOnlyProfile.class)

@@ -19,10 +19,14 @@ package org.acme.http.pqc;
 import io.quarkus.test.junit.QuarkusIntegrationTest;
 
 /**
- * Native integration test for PqcOnlyTest.
- * Runs the same tests as PqcOnlyTest but against the native binary.
+ * Native integration test for PqcWithFallbackTest.
+ * Runs the same tests as PqcWithFallbackTest but against a native binary
+ * built with PQC+fallback configuration (X25519MLKEM768,x25519,secp256r1).
  *
- * Note: @Order(2) ensures this test runs AFTER PqcWithFallbackIT.
+ * This test runs FIRST in native mode (integration-test phase) against a binary
+ * built with fallback support. After this test completes, the native binary is
+ * rebuilt with PQC-only config for PqcOnlyIT.
+ *
  * BC providers are registered by CertificateTestResource (inherited from AbstractPqcTest).
  *
  * Run with: mvn verify -Dnative

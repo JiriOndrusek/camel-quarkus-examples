@@ -29,12 +29,13 @@ import org.junit.jupiter.api.Test;
  * - BCJSSE: SUCCESS (supports X25519MLKEM768 and fallback)
  * - SunJSSE: SUCCESS (ignores X25519MLKEM768, uses secp256r1 fallback)
  *
- * Note: @Order(1) ensures this test runs BEFORE PqcOnlyTest.
+ * Note: @Order(1) ensures this test runs BEFORE PqcOnlyTest in JVM mode.
  * This test must run first because SunJSSE can successfully initialize with the fallback
  * configuration. If the PQC-only test runs first, SunJSSE's static initialization fails
  * permanently and cannot be recovered.
  *
- * JVM only, we are not able to change build time configuration of the native build
+ * In native mode, this test also runs first but against a dedicated native binary
+ * built with fallback configuration
  */
 @QuarkusTest
 @TestProfile(PqcWithFallbackProfile.class)

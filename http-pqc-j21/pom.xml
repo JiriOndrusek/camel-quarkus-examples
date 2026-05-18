@@ -335,10 +335,7 @@
             </activation>
             <properties>
                 <quarkus.native.enabled>true</quarkus.native.enabled>
-                <!-- Include fallback groups (x25519, secp256r1) to allow handshake to succeed
-                     even if X25519MLKEM768 fails to initialize in native mode. This helps diagnose
-                     whether PQC is being used or falling back to classical algorithms. -->
-                <pqc.tls.named.groups>X25519MLKEM768,x25519,secp256r1</pqc.tls.named.groups>
+                <jdk.tls.namedGroups>X25519MLKEM768,x25519,secp256r1</jdk.tls.namedGroups>
             </properties>
             <build>
                 <plugins>
@@ -354,10 +351,7 @@
                                 <configuration>
                                     <systemPropertyVariables>
                                         <quarkus.native.enabled>${quarkus.native.enabled}</quarkus.native.enabled>
-                                        <!--  CRITICAL: Set jdk.tls.namedGroups for test JVM (separate from native binary)
-                                              This ensures the test client offers X25519MLKEM768 in the supported_groups extension
-                                              The value should match the test profile being used (pqc-only or pqc-with-fallback) -->
-                                        <jdk.tls.namedGroups>${pqc.tls.named.groups}</jdk.tls.namedGroups>
+                                        <jdk.tls.namedGroups>${jdk.tls.namedGroups}</jdk.tls.namedGroups>
                                     </systemPropertyVariables>
                                 </configuration>
                             </execution>

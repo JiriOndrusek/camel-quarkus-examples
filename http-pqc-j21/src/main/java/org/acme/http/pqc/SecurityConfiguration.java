@@ -47,17 +47,6 @@ public class SecurityConfiguration {
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
         }
 
-        // Configure JSSE to enable PQC hybrid key exchange algorithms
-        // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
-        String namedGroups = ConfigProvider.getConfig().getValue("jdk.tls.namedGroups",
-                String.class);
-        if (namedGroups != null) {
-            System.setProperty("jdk.tls.namedGroups", namedGroups);
-            System.out.println("//////////////////////////////////////////////////////");
-            LOG.info("Configured TLS named groups for PQC: " + namedGroups);
-            System.out.println("//////////////////////////////////////////////////////");
-        }
-
         if (isNativeMode) {
             // In native mode, providers are already registered at build time via -H:AdditionalSecurityProviders
             // We cannot remove and re-register them. Just verify they're present.
@@ -66,6 +55,15 @@ public class SecurityConfiguration {
             LOG.info("BCJSSE provider: " + Security.getProvider("BCJSSE"));
             LOG.info("DefaultSecureRandom provider: " + Security.getProvider("DefaultSecureRandom"));
         } else {
+            // Configure JSSE to enable PQC hybrid key exchange algorithms
+            // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
+            String namedGroups = ConfigProvider.getConfig().getValue("jdk.tls.namedGroups",
+                    String.class);
+            if (namedGroups != null) {
+                System.setProperty("jdk.tls.namedGroups", namedGroups);
+                LOG.info("Configured TLS named groups for PQC: " + namedGroups);
+            }
+
             // JVM mode: Remove existing providers to ensure clean state for each test
             if (Security.getProvider("BCJSSE") != null) {
                 Security.removeProvider("BCJSSE");

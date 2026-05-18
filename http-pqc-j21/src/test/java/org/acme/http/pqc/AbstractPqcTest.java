@@ -126,8 +126,20 @@ abstract class AbstractPqcTest {
             }
         } catch (NoClassDefFoundError | ExceptionInInitializerError | javax.net.ssl.SSLHandshakeException
                 | org.apache.hc.client5.http.HttpHostConnectException e) {
-            assertTrue(e.getMessage().toLowerCase().contains("connection refused"),
-                    "Different reason - '%s' - of failure then expected".formatted(e.getMessage()));
+            if (expectFailure) {
+                // Expected failure - SSL handshake should fail or connection should be refused
+                LOG.info(securityProvider + " failed as expected: " + e.getClass().getSimpleName() + ": "
+                        + (e.getMessage() != null ? e.getMessage() : "(no message)"));
+                failedAsExpected = true;
+            } else {
+                // Unexpected failure - this is a real error
+                String message = e.getMessage() != null ? e.getMessage() : e.getClass().getSimpleName();
+                fail(securityProvider + " should have succeeded but failed with: " + message, e);
+            }
+        }
+
+        if (expectFailure && !failedAsExpected) {
+            fail(securityProvider + " should have failed but succeeded");
         }
 
     }

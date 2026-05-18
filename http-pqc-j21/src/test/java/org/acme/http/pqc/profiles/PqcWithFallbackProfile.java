@@ -33,6 +33,6 @@ public class PqcWithFallbackProfile implements QuarkusTestProfile {
 
     @Override
     public Map<String, String> getConfigOverrides() {
-        return Map.of("jdk.tls.namedGroups", "X25519MLKEM768,secp256r1");
+        return Map.of("jdk.tls.namedGroups", "X25519MLKEM768,x25519,secp256r1");
     }
 }
