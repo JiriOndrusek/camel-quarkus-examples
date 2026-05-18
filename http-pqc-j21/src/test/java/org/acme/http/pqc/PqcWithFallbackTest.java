@@ -19,7 +19,6 @@ package org.acme.http.pqc;
 import io.quarkus.test.junit.QuarkusTest;
 import io.quarkus.test.junit.TestProfile;
 import org.acme.http.pqc.profiles.PqcWithFallbackProfile;
-import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
 
@@ -52,7 +51,6 @@ class PqcWithFallbackTest extends AbstractPqcTest {
         testHttpClientConnection("BCJSSE", false);
     }
 
-    @Disabled //why it fails in jvm????
     @Test
     void testHttpClientWithSunJSSE() throws Exception {
         testHttpClientConnection("SunJSSE", false);

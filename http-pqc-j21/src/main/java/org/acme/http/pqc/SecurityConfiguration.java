@@ -24,6 +24,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.enterprise.event.Observes;
 import org.bouncycastle.jce.provider.BouncyCastleProvider;
 import org.bouncycastle.jsse.provider.BouncyCastleJsseProvider;
+import org.eclipse.microprofile.config.ConfigProvider;
 import org.jboss.logging.Logger;
 
 @DefaultBean
@@ -44,6 +45,17 @@ public class SecurityConfiguration {
             disabled = disabled.replaceAll(",\\s*ECDH\\b", "");
             Security.setProperty("jdk.tls.disabledAlgorithms", disabled);
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
+        }
+
+        // Configure JSSE to enable PQC hybrid key exchange algorithms
+        // X25519MLKEM768 combines classical X25519 ECDH with quantum-resistant ML-KEM-768
+        String namedGroups = ConfigProvider.getConfig().getValue("jdk.tls.namedGroups",
+                String.class);
+        if (namedGroups != null) {
+            System.setProperty("jdk.tls.namedGroups", namedGroups);
+            System.out.println("//////////////////////////////////////////////////////");
+            LOG.info("Configured TLS named groups for PQC: " + namedGroups);
+            System.out.println("//////////////////////////////////////////////////////");
         }
 
         if (isNativeMode) {

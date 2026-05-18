@@ -16,6 +16,8 @@
  */
 package org.acme.http.pqc.profiles;
 
+import java.util.Map;
+
 import io.quarkus.test.junit.QuarkusTestProfile;
 
 /**
@@ -27,5 +29,10 @@ public class PqcWithFallbackProfile implements QuarkusTestProfile {
     @Override
     public String getConfigProfile() {
         return "pqc-with-fallback";
+    }
+
+    @Override
+    public Map<String, String> getConfigOverrides() {
+        return Map.of("jdk.tls.namedGroups", "X25519MLKEM768,secp256r1");
     }
 }

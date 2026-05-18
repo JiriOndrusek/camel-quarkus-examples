@@ -36,10 +36,11 @@ import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuil
 import org.apache.hc.client5.http.io.HttpClientConnectionManager;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
 import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
-import org.apache.hc.core5.http.io.entity.EntityUtils;
+import org.apache.hc.core5.http.HttpResponse;
 import org.jboss.logging.Logger;
 
 import static io.restassured.RestAssured.given;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
@@ -52,10 +53,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 abstract class AbstractPqcTest {
 
     private static final Logger LOG = Logger.getLogger(AbstractPqcTest.class);
-
-
-
-
 
     void testRestAssuredConnection() throws Exception {
         int port = RestAssured.port > 0 ? RestAssured.port : 8443;
@@ -118,35 +115,21 @@ abstract class AbstractPqcTest {
                     .setConnectionManager(connectionManager)
                     .build()) {
 
-                HttpGet request = new HttpGet("https://localhost:" + port + "/api/data");
-                String response = httpClient.execute(request, httpResponse -> {
-                    int statusCode = httpResponse.getCode();
-                    EntityUtils.toString(httpResponse.getEntity());
-                    return "Status: " + statusCode;
-                });
+                HttpGet request = new HttpGet("https://localhost:" + port + "/pqc/secure");
+                int responseStatus = httpClient.execute(request, HttpResponse::getCode);
 
-                //todo better assertion of failure
                 if (expectFailure) {
-                    if (response.contains("404")) {
-                        //todo works differently in jvm
-                        failedAsExpected = true;
-                    } else {
-                        fail(securityProvider + " should have failed but got: " + response);
-                    }
+                    fail(securityProvider + " should have failed but got response status : " + responseStatus);
+                } else {
+                    assertTrue(responseStatus == 200, "Expected response status is 200");
                 }
             }
         } catch (NoClassDefFoundError | ExceptionInInitializerError | javax.net.ssl.SSLHandshakeException
                 | org.apache.hc.client5.http.HttpHostConnectException e) {
-            if (expectFailure) {
-                failedAsExpected = true;
-            } else {
-                throw e;
-            }
+            assertTrue(e.getMessage().toLowerCase().contains("connection refused"),
+                    "Different reason - '%s' - of failure then expected".formatted(e.getMessage()));
         }
 
-        if (expectFailure && !failedAsExpected) {
-            fail(securityProvider + " should have failed with X25519MLKEM768");
-        }
     }
 
     protected SSLContext createSslContext(String provider) throws Exception {

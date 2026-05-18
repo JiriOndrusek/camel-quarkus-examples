@@ -16,6 +16,8 @@
  */
 package org.acme.http.pqc.profiles;
 
+import java.util.Map;
+
 import io.quarkus.test.junit.QuarkusTestProfile;
 
 /**
@@ -27,5 +29,10 @@ public class PqcOnlyProfile implements QuarkusTestProfile {
     @Override
     public String getConfigProfile() {
         return "pqc-only";
+    }
+
+    @Override
+    public Map<String, String> getConfigOverrides() {
+        return Map.of("jdk.tls.namedGroups", "X25519MLKEM768");
     }
 }
