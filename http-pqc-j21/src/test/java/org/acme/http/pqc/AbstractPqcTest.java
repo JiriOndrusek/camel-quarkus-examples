@@ -53,6 +53,10 @@ abstract class AbstractPqcTest {
 
     private static final Logger LOG = Logger.getLogger(AbstractPqcTest.class);
 
+
+
+
+
     void testRestAssuredConnection() throws Exception {
         int port = RestAssured.port > 0 ? RestAssured.port : 8443;
 

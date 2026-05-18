@@ -34,6 +34,8 @@ import org.junit.jupiter.api.Test;
  * This test must run first because SunJSSE can successfully initialize with the fallback
  * configuration. If the PQC-only test runs first, SunJSSE's static initialization fails
  * permanently and cannot be recovered.
+ *
+ * JVM only, we are not able to change build time configuration of the native build
  */
 @QuarkusTest
 @TestProfile(PqcWithFallbackProfile.class)

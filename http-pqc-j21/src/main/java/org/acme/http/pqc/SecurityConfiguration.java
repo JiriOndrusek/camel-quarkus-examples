@@ -33,12 +33,8 @@ public class SecurityConfiguration {
     private static final Logger LOG = Logger.getLogger(SecurityConfiguration.class);
 
     void onStart(@Observes StartupEvent ev) {
-        LOG.info("SecurityConfiguration.onStart() - classLoader: " + this.getClass().getClassLoader());
-        LOG.info("SecurityConfiguration.onStart() - thread classLoader: " + Thread.currentThread().getContextClassLoader());
-
-        // Detect if running in native mode
-        boolean isNative = "executable".equals(System.getProperty("org.graalvm.nativeimage.kind"));
-        LOG.info("Running in native mode: " + isNative);
+        // Detect native mode
+        boolean isNativeMode = "executable".equals(System.getProperty("org.graalvm.nativeimage.kind"));
 
         // Remove ECDH from jdk.tls.disabledAlgorithms.
         // JDK 21 disables raw "ECDH" which BCJSSE interprets broadly,
@@ -50,7 +46,7 @@ public class SecurityConfiguration {
             LOG.info("Removed ECDH from jdk.tls.disabledAlgorithms for BouncyCastle compatibility");
         }
 
-        if (isNative) {
+        if (isNativeMode) {
             // In native mode, providers are already registered at build time via -H:AdditionalSecurityProviders
             // We cannot remove and re-register them. Just verify they're present.
             LOG.info("Native mode: Verifying build-time registered providers");

@@ -20,10 +20,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import org.apache.camel.builder.endpoint.EndpointRouteBuilder;
 
 /**
- * Camel routes demonstrating Post-Quantum Cryptography (PQC) with TLS 1.3.
- * Based on oscerd/camel-pqc-tls example.
- * Source:
- * https://github.com/oscerd/camel-pqc-tls/blob/main/pqc-ssl-context-jdk21/src/main/resources/camel/pqc-ssl-context.camel.yaml
+ * Simple route demonstrating Post-Quantum Cryptography (PQC) with TLS 1.3.
  */
 @ApplicationScoped
 public class PqcCamelRoute extends EndpointRouteBuilder {
