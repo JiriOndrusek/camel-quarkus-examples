@@ -118,6 +118,22 @@
             <artifactId>httpclient5</artifactId>
             <scope>test</scope>
         </dependency>
+        <!-- Vert.x WebClient for PQC tests with OpenSSL backend -->
+        <dependency>
+            <groupId>io.vertx</groupId>
+            <artifactId>vertx-web-client</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <!-- OpenSSL backend for enforce-pqc=STRICT (requires system OpenSSL >= 3.5) -->
+        <dependency>
+            <groupId>io.netty</groupId>
+            <artifactId>netty-tcnative-classes</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>io.smallrye</groupId>
+            <artifactId>smallrye-openssl</artifactId>
+            <classifier>linux-x86_64</classifier>
+        </dependency>
     </dependencies>
 
     <build>

@@ -19,6 +19,7 @@ package org.acme.http.pqc;
 import java.io.FileInputStream;
 import java.security.KeyStore;
 import java.util.Arrays;
+import java.util.concurrent.CompletionException;
 
 import javax.net.ssl.KeyManagerFactory;
 import javax.net.ssl.SSLContext;
@@ -28,6 +29,13 @@ import javax.net.ssl.TrustManagerFactory;
 import io.restassured.RestAssured;
 import io.restassured.config.RestAssuredConfig;
 import io.restassured.config.SSLConfig;
+import io.vertx.core.Vertx;
+import io.vertx.core.buffer.Buffer;
+import io.vertx.core.net.OpenSSLEngineOptions;
+import io.vertx.core.net.PfxOptions;
+import io.vertx.ext.web.client.HttpResponse;
+import io.vertx.ext.web.client.WebClient;
+import io.vertx.ext.web.client.WebClientOptions;
 import org.apache.hc.client5.http.classic.methods.HttpGet;
 import org.apache.hc.client5.http.impl.classic.CloseableHttpClient;
 import org.apache.hc.client5.http.impl.classic.HttpClients;
@@ -35,18 +43,20 @@ import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManager;
 import org.apache.hc.client5.http.impl.io.PoolingHttpClientConnectionManagerBuilder;
 import org.apache.hc.client5.http.ssl.NoopHostnameVerifier;
 import org.apache.hc.client5.http.ssl.SSLConnectionSocketFactory;
-import org.apache.hc.core5.http.HttpResponse;
 import org.jboss.logging.Logger;
 
 import static io.restassured.RestAssured.given;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 /**
  * Abstract base class for PQC tests using JDK 25+ native SunJSSE.
  *
- * Unlike the JDK 21 example, no BouncyCastle JSSE provider registration is needed.
- * JDK 25+ SunJSSE natively supports X25519MLKEM768 hybrid key exchange.
+ * Provides two client approaches:
+ * - JSSE HttpClient5 with configurable named groups ({@link #testHttpClientConnection})
+ * - Vert.x WebClient with OpenSSL backend for hybrid PQC ({@link #testWebClientConnection})
  */
 abstract class AbstractPqcTest {
 
@@ -99,7 +109,7 @@ abstract class AbstractPqcTest {
                         .build()) {
 
             HttpGet request = new HttpGet("https://localhost:" + RestAssured.port + "/pqc/secure");
-            int responseStatus = httpClient.execute(request, HttpResponse::getCode);
+            int responseStatus = httpClient.execute(request, org.apache.hc.core5.http.HttpResponse::getCode);
 
             if (expectFailure) {
                 fail("Connection should have failed but got response status: " + responseStatus);
@@ -111,6 +121,48 @@ abstract class AbstractPqcTest {
                 fail("Connection should have succeeded but failed: " + e.getMessage());
             }
             LOG.info("Connection failed as expected: " + e.getMessage());
+        }
+    }
+
+    /**
+     * Test connection using Vert.x WebClient with OpenSSL backend.
+     *
+     * @param useKeyExchange     if true, enables OpenSSL engine with hybrid PQC key exchange
+     * @param expectFailure if true, expects the connection to fail (SSLException)
+     */
+    void testWebClientConnection(boolean useKeyExchange, boolean expectFailure) {
+        WebClientOptions options = new WebClientOptions();
+        options.setSsl(true);
+        options.setKeyCertOptions(new PfxOptions()
+                .setPath("target/certs/client-keystore.p12")
+                .setPassword("changeit"));
+
+        if (useKeyExchange) {
+            options.setSslEngineOptions(new OpenSSLEngineOptions());
+            options.setUseHybridKeyExchangeProtocol(true);
+            options.setTrustOptions(new PfxOptions()
+                    .setPath("target/certs/client-truststore.p12")
+                    .setPassword("changeit"));
+        } else {
+            options.setTrustAll(true);
+        }
+
+        Vertx vertx = Vertx.vertx();
+        WebClient client = WebClient.create(vertx, options);
+        String url = "https://localhost:" + RestAssured.port + "/pqc/secure";
+
+        if (expectFailure) {
+            CompletionException ex = assertThrows(CompletionException.class, () -> client
+                    .getAbs(url).send().toCompletionStage().toCompletableFuture().join());
+            Throwable cause = ex.getCause();
+            assertTrue(cause instanceof javax.net.ssl.SSLException,
+                    "Expected SSLException but got: " + cause.getClass().getName() + ": " + cause.getMessage());
+            LOG.info("Connection failed with SSLException as expected: " + cause.getMessage());
+        } else {
+            HttpResponse<Buffer> response = client
+                    .getAbs(url).send().toCompletionStage().toCompletableFuture().join();
+            assertEquals(200, response.statusCode());
+            LOG.info("Connection succeeded: " + response.bodyAsString());
         }
     }
 

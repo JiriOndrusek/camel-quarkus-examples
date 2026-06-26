@@ -14,26 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.acme.http.pqc.profiles;
+package org.acme.http.pqc;
 
-import java.util.Map;
+import io.quarkus.test.junit.QuarkusIntegrationTest;
 
-import io.quarkus.test.junit.QuarkusTestProfile;
-
-/**
- * Test profile for PQC with classical fallback.
- * Configures X25519MLKEM768 with x25519 and secp256r1 as fallback groups
- * via Quarkus TLS Registry.
- */
-public class PqcWithFallbackProfile implements QuarkusTestProfile {
-
-    @Override
-    public String getConfigProfile() {
-        return "pqc-with-fallback";
-    }
-
-    @Override
-    public Map<String, String> getConfigOverrides() {
-        return Map.of("quarkus.tls.key-exchange-protocols", "X25519MLKEM768,x25519,secp256r1");
-    }
+@QuarkusIntegrationTest
+class PqcStrictEnforcementIT extends PqcStrictEnforcementTest {
 }
