@@ -1,0 +1,91 @@
+= LangChain4j Ingest: a knowledge base that stays correct
+
+The `langchain4j-ingest-quickstart` example shows the easy path. This example shows the
+product: `mode=sync`, where the knowledge base *mirrors* its source over time —
+
+* an **edited** file replaces its previous vectors (no duplicates, ever — segment ids are
+  deterministic);
+* a **deleted** file disappears from the knowledge base, behind a safety interlock (a failed
+  enumeration or a pass with any failure deletes nothing, and mass deletion beyond
+  `reconcile.bulk-delete-threshold` is refused without explicit consent);
+* an **unchanged** corpus costs nothing on restart — change detection uses a cheap fingerprint
+  (size + mtime) before ever reading a file;
+* **corrections from code stick**: `delete` survives every future pass (a tombstone), and
+  `upsert` over a source-owned document pins it against reversion.
+
+The bookkeeping lives in a small *sync ledger* table in the application's datasource. In dev
+mode, **Dev Services starts PostgreSQL automatically** — the same database also hosts the
+pgvector store (via the Quarkus LangChain4j pgvector extension), so the whole example needs
+zero infrastructure setup. The embedding model is a local ONNX model; no API keys.
+
+== Running
+
+[source,shell]
+----
+mvn clean compile quarkus:dev
+----
+
+=== Watch it stay correct
+
+[source,shell]
+----
+# search
+curl "http://localhost:8080/kb/search?q=How%20long%20is%20the%20warranty%3F"
+
+# edit data/manuals/warranty.txt (change "twenty four" to "thirty six"), then search again:
+# the old answer is REPLACED, not joined
+curl "http://localhost:8080/kb/search?q=How%20long%20is%20the%20warranty%3F"
+
+# delete data/manuals/returns.txt: the returns policy disappears from the knowledge base
+curl "http://localhost:8080/kb/search?q=Can%20I%20return%20a%20product%3F"
+----
+
+=== Corrections from code
+
+[source,shell]
+----
+# a legal hold: the document stays deleted even though its file still exists
+curl -X DELETE "http://localhost:8080/kb/documents/warranty.txt"
+
+# lift it: the next pass re-ingests the file
+curl -X POST "http://localhost:8080/kb/documents/warranty.txt/unsuppress"
+
+# an admin correction: pins the document — the source stops updating it until /unpin
+curl -X POST -H "Content-Type: text/plain" \
+     -d "The warranty period is ninety nine months." \
+     "http://localhost:8080/kb/documents/warranty.txt"
+----
+
+== The Dev UI: per-document visibility
+
+Open http://localhost:8080/q/dev-ui (or press `d` in the dev-mode terminal) and locate the
+**Camel LangChain4j Ingest** card among the extensions. Its **Ingestion Pipelines** page shows:
+
+* every pipeline with its mode, readiness and counters — documents, segments, replaced,
+  unchanged, deleted, dead-lettered, failures;
+* selecting a sync pipeline opens its **ledger**: one row per document with status, segment
+  count, origin (`source` vs `api`), and the `tombstoned`/`pinned` flags.
+
+This is the answer to _"why doesn't my assistant know about document X"_ without any
+vector-store spelunking: after the legal-hold `DELETE` above, the ledger shows
+`warranty.txt` with `tombstoned=true`; after the correction, `pinned=true` and
+`origin=api`.
+
+== Observability
+
+* Readiness: `curl http://localhost:8080/q/health/ready` — the pipeline gates readiness until
+  its first successful pass (a pod answering from a half-populated knowledge base answers
+  *worse*, not failing).
+* Metrics: `curl http://localhost:8080/q/metrics | grep cq_ingest` — the same counters the Dev
+  UI shows, as Micrometer meters tagged by pipeline.
+
+== Going further
+
+* Point a pipeline at a bucket (`source.type=s3`), a topic (`source.type=kafka` — record keys
+  are document ids, null-payload tombstones delete) or a URL (`source.type=http`).
+* Prefer type-safe Java? The same model as an `@Ingest` builder method — every property has a
+  builder twin.
+* Add a chat model (for example `quarkus-langchain4j-ollama`) and a `@RegisterAiService`
+  interface: the extension auto-produces the `RetrievalAugmentor` pairing your AI service with
+  this knowledge base. With multiple knowledge bases, mark exactly one augmentor as default —
+  an unmarked ambiguity fails the build instead of silently disabling RAG.

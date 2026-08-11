@@ -1,0 +1,50 @@
+= LangChain4j Ingest: the easy path
+
+A folder becomes a searchable knowledge base in two lines of configuration:
+
+[source,properties]
+----
+quarkus.camel.ai.ingest.docs.source.type=file
+quarkus.camel.ai.ingest.docs.source.directory=data/docs
+----
+
+Every file in `data/docs` is parsed, split into segments, embedded with a local ONNX model
+(no API key, no network) and written into an in-memory vector store. The application only
+provides the two beans a knowledge base needs — an `EmbeddingStore` and an `EmbeddingModel` —
+and exposes a semantic search endpoint over the result.
+
+No Apache Camel knowledge is required; the routes doing the work are generated from the
+configuration.
+
+== Running
+
+[source,shell]
+----
+mvn clean compile quarkus:dev
+----
+
+Then ask a question:
+
+[source,shell]
+----
+curl "http://localhost:8080/search?q=How%20long%20is%20the%20warranty%3F"
+----
+
+The answer segments come back with their similarity score and the document they came from
+(`cq_document_id` — every segment carries citation metadata).
+
+Drop another `.txt` file into `data/docs` while the application runs: it is picked up on the
+next poll and becomes searchable within seconds.
+
+== The Dev UI
+
+In dev mode, open http://localhost:8080/q/dev-ui and find the *Camel LangChain4j Ingest* card.
+Its *Ingestion Pipelines* page lists every pipeline with its counters (documents, segments,
+replaced, unchanged, deleted, failures).
+
+== What this example does not do
+
+This is `mode=append`, the demo tier: documents are only ever added, and a restart re-ingests
+the folder. For a knowledge base that *stays correct* — edits replace, deletions disappear,
+restarts cost nothing — see the `langchain4j-ingest-knowledge-sync` example, which uses
+`mode=sync` with a database-backed sync ledger.

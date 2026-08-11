@@ -1,0 +1,13 @@
+Frobnicator X200 - Owner's Manual
+
+Power supply: the Frobnicator X200 ships with a EUROPA-MK1 power supply rated at 12 volts.
+Never operate the device with a third-party power supply.
+
+Warranty: the warranty period is twenty four months from the date of purchase.
+Keep the original receipt; it is required for any warranty claim.
+
+Safety: never immerse the device in water. The maximum ambient operating temperature
+is forty degrees Celsius.
+
+Maintenance: the filter should be replaced every six months. Replacement filters are
+available under part number FRB-X200-FLT.

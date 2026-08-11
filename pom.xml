@@ -48,6 +48,8 @@
         <module>file-split-log-xml</module>
         <module>health</module>
         <module>http-log</module>
+        <module>langchain4j-ingest-knowledge-sync</module>
+        <module>langchain4j-ingest-quickstart</module>
         <module>http-pqc-j17</module>
         <module>http-pqc-j21</module>
         <module>jdbc-datasource</module>
