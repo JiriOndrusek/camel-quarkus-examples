@@ -50,6 +50,7 @@
         <module>http-log</module>
         <module>langchain4j-ingest-knowledge-sync</module>
         <module>langchain4j-ingest-quickstart</module>
+        <module>langchain4j-ingest-s3-builder</module>
         <module>http-pqc-j17</module>
         <module>http-pqc-j21</module>
         <module>jdbc-datasource</module>

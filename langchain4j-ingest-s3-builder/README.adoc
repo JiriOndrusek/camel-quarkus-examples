@@ -1,0 +1,161 @@
+= LangChain4j Ingest: an S3 bucket as a knowledge base, declared in Java
+
+The `langchain4j-ingest-knowledge-sync` example declares its pipeline in
+`application.properties`. This example declares the *same model in Java*, with the
+`@Ingest` builder — points it at an **S3 bucket** instead of a directory, and plugs the
+result into **Quarkus LangChain4j RAG**: a `@RegisterAiService` assistant answers from
+whatever the bucket currently contains, with zero RAG wiring code.
+
+[source,java]
+----
+@Ingest("manuals")
+IngestPipeline manuals() {
+    return IngestPipeline.from(Source.s3(bucket)
+            .region(region)
+            .accessKey(accessKey)
+            .secretKey(secretKey)
+            .pollInterval(2000))
+            .sync()
+            .writeStrategy("upsert")
+            .embeddingModelId("all-minilm-l6-v2@1")
+            .splitter("recursive", 500, 50);
+}
+----
+
+Every builder option has a properties twin, so nothing is lost — what is gained is the IDE:
+autocompletion over the pipeline's full option set, and values that can be computed
+(here: the connection details come from `@ConfigProperty` fields, so the *topology* lives in
+code while the *endpoints and credentials* still differ per environment).
+
+The pipeline runs in `sync` mode: the knowledge base *mirrors* the bucket. Object keys are the
+document ids and ETags the change fingerprints — taken from the bucket listing, so an
+unchanged object is never even downloaded. An overwritten object replaces its previous vectors
+(no duplicates, ever), a deleted object disappears behind the safety interlock, and the
+pipeline gates application readiness until its first successful pass.
+
+The sync ledger lives in the application's datasource and the vectors in pgvector — in dev and
+test mode a single Dev Services PostgreSQL serves both, automatically. The embedding model is a
+local ONNX model; no API keys.
+
+== Running
+
+Start an S3-compatible store and create the bucket:
+
+[source,shell]
+----
+docker run --rm -d -p 4566:4566 -e AWS_ACCESS_KEY_ID=test -e AWS_SECRET_ACCESS_KEY=test \
+    --name ingest-s3 mirror.gcr.io/floci/floci:1.5.28
+
+aws --endpoint-url http://localhost:4566 s3 mb s3://manuals
+----
+
+Start the application in dev mode:
+
+[source,shell]
+----
+mvn clean compile quarkus:dev
+----
+
+=== Watch the bucket become searchable
+
+[source,shell]
+----
+# upload a document
+echo "The warranty period is twenty four months." > warranty.txt
+aws --endpoint-url http://localhost:4566 s3 cp warranty.txt s3://manuals/warranty.txt
+
+# search (give the pipeline a couple of seconds to pick it up)
+curl "http://localhost:8080/search?q=How%20long%20is%20the%20warranty%3F"
+
+# overwrite the object: the old answer is REPLACED, not joined
+echo "The warranty period is thirty six months." > warranty.txt
+aws --endpoint-url http://localhost:4566 s3 cp warranty.txt s3://manuals/warranty.txt
+curl "http://localhost:8080/search?q=How%20long%20is%20the%20warranty%3F"
+
+# delete the object: it disappears from the knowledge base
+aws --endpoint-url http://localhost:4566 s3 rm s3://manuals/warranty.txt
+curl "http://localhost:8080/search?q=How%20long%20is%20the%20warranty%3F"
+----
+
+Readiness is gated on the first successful synchronisation pass:
+
+[source,shell]
+----
+curl http://localhost:8080/q/health/ready
+----
+
+== Ask the assistant (Quarkus LangChain4j RAG)
+
+The example contains a plain `@RegisterAiService` interface (`ManualsAssistant`) — and *no*
+RAG code. The ingest extension auto-produces a `RetrievalAugmentor` for the pipeline; Quarkus
+LangChain4j picks it up as the CDI default, so every question to the assistant is augmented
+with content retrieved from the knowledge base the bucket feeds.
+
+To see what RAG retrieves — the augmented prompt an LLM would receive — no LLM is needed:
+
+[source,shell]
+----
+curl "http://localhost:8080/chat/preview?q=How%20long%20is%20the%20warranty%3F"
+----
+
+For real answers, run the chat model locally with https://ollama.com/[Ollama] and ask:
+
+[source,shell]
+----
+ollama pull llama3.2   # once
+curl "http://localhost:8080/chat?q=How%20long%20is%20the%20warranty%3F"
+----
+
+Upload a new object to the bucket and ask again: the assistant knows about it a couple of
+seconds later, and stops knowing what you delete.
+
+== Testing
+
+The tests start the S3-compatible container themselves (Testcontainers) and drive the full
+lifecycle: put → searchable (and incorporated into the RAG prompt), overwrite → replaced,
+delete → gone. No LLM is involved — the RAG assertion uses `/chat/preview`.
+
+[source,shell]
+----
+# JVM mode
+mvn clean test
+
+# native mode
+mvn clean verify -Dnative
+----
+
+=== Testing against a real LLM
+
+An opt-in test drives the whole chain — S3 object → ingestion → RAG retrieval → a *real*
+chat model — using **Ollama Dev Services**: Quarkus starts an Ollama container (or reuses a
+locally running Ollama automatically) and pulls the model on first run (~1.3 GB, cached in
+`~/.ollama` afterwards):
+
+[source,shell]
+----
+mvn clean test -Dtest-llm=true
+----
+
+== Against real AWS
+
+Point the configuration at your bucket and leave the endpoint override empty:
+
+[source,shell]
+----
+export S3_BUCKET=my-manuals
+export S3_REGION=eu-central-1
+export S3_ACCESS_KEY=...
+export S3_SECRET_KEY=...
+export S3_ENDPOINT_OVERRIDE=
+----
+
+== Going further
+
+* Prefer configuration over code? The `langchain4j-ingest-knowledge-sync` example declares an
+  equivalent pipeline entirely in `application.properties`, plus corrections-from-code and the
+  Dev UI ledger view.
+* New to the extension? Start with `langchain4j-ingest-quickstart`.
+
+== Feedback
+
+Please report bugs and propose improvements via https://github.com/apache/camel-quarkus/issues[GitHub issues of Camel Quarkus] project.
