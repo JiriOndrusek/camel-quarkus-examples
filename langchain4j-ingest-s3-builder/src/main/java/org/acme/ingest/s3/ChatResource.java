@@ -34,7 +34,8 @@ import jakarta.ws.rs.core.MediaType;
  * The RAG side of the example: {@code /chat} asks the AI service (needs a running Ollama, see
  * the README), {@code /chat/preview} shows what RAG retrieves for a question — the augmented
  * prompt an LLM would receive — without calling any LLM. The injected
- * {@link RetrievalAugmentor} is the same auto-produced bean the AI service uses.
+ * {@link RetrievalAugmentor} is the same bean {@link ManualsAugmentor} supplies to the AI
+ * service.
  */
 @Path("/chat")
 public class ChatResource {

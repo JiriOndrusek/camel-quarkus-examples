@@ -53,7 +53,7 @@ public class SearchResource {
                 .matches().stream()
                 .map(match -> Map.<String, Object> of(
                         "score", match.score(),
-                        "document", String.valueOf(match.embedded().metadata().getString("cq_document_id")),
+                        "document", String.valueOf(match.embedded().metadata().getString("camel_ingest_document_id")),
                         "text", match.embedded().text()))
                 .toList();
     }

@@ -26,7 +26,7 @@ import org.eclipse.microprofile.config.inject.ConfigProperty;
 
 /**
  * The ingestion pipeline declared in Java: the {@code @Ingest} builder is the type-safe twin of
- * the {@code quarkus.camel.ai.ingest.*} configuration — every option has a properties
+ * the {@code quarkus.camel.langchain4j.ingest.*} configuration — every option has a properties
  * equivalent. The topology lives in code where the IDE can help; connection details stay in
  * configuration, where they can differ per environment (the tests point them at an
  * S3-compatible container).
@@ -46,36 +46,32 @@ public class ManualsPipeline {
     @ConfigProperty(name = "s3.secret-key")
     String secretKey;
 
-    /** Set for S3-compatible stores (MinIO, floci); leave empty for real AWS. */
+    /** Set for S3-compatible stores (MinIO, LocalStack); leave empty for real AWS. */
     @ConfigProperty(name = "s3.endpoint-override")
     Optional<String> endpointOverride;
 
     @Ingest("manuals")
     IngestPipeline manuals() {
-        // object keys are the document ids, ETags the change fingerprints — available from
-        // the bucket listing, so unchanged objects are never even downloaded
-        Source source = Source.s3(bucket)
-                .region(region)
-                .accessKey(accessKey)
-                .secretKey(secretKey)
-                .pollInterval(2000);
-        endpointOverride.ifPresent(source::endpointOverride);
-
-        return IngestPipeline.from(source)
-                // sync: the knowledge base MIRRORS the bucket — an overwritten object
-                // replaces its previous vectors, a deleted object disappears, an unchanged
-                // bucket costs nothing on restart. The sync ledger lives in the application's
-                // datasource; the embedding store and model are resolved automatically since
-                // exactly one of each exists here (pgvector + the local ONNX model).
-                .sync()
-                // pgvector overwrites on same-id writes (measured), so replacement is an upsert
-                .writeStrategy("upsert")
-                // bump if the embedding model ever changes, so the corpus re-embeds instead of
-                // silently mixing two embedding spaces
-                .embeddingModelId("all-minilm-l6-v2@1")
-                // deletion safety: a pass refusing to delete more than half the corpus needs
-                // explicit consent (allowBulkDelete)
-                .bulkDeleteThreshold(0.5)
-                .splitter("recursive", 500, 50);
+        // the object key is the document id: retrieval cites it, and the register deduplicates
+        // by it. deleteAfterRead(false) matters - a knowledge base reads its source, it does
+        // not consume it
+        return IngestPipeline.from(Source.endpoint(dsl -> {
+            var s3 = dsl.aws2S3(bucket)
+                    .region(region)
+                    .accessKey(accessKey)
+                    .secretKey(secretKey)
+                    .deleteAfterRead(false)
+                    .delay(2000);
+            endpointOverride.ifPresent(url -> s3.uriEndpointOverride(url).overrideEndpoint(true));
+            return s3;
+        })
+                .documentId("CamelAwsS3Key")
+                // first write wins per key: a re-listed object ingests once. An overwritten
+                // object keeps its key, so it is answered skipped, not re-embedded - streams
+                // that carry updates need a version-aware id (the synchronising engine that
+                // mirrors a changing bucket is a later release)
+                .idempotentRepository("manualsRegister")
+                .idempotentRepositoryAutoCreate(true))
+                .splitter(500, 50);
     }
 }

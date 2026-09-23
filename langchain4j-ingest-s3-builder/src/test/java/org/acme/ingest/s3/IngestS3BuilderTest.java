@@ -25,7 +25,6 @@ import io.restassured.RestAssured;
 import org.junit.jupiter.api.Test;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
-import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import static org.awaitility.Awaitility.await;
@@ -33,15 +32,16 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * The {@code @Ingest}-builder pipeline against the S3 container: object put → searchable,
- * overwrite (new ETag) → replaced without duplicates, delete → removed by reconciliation.
+ * The {@code @Ingest}-builder pipeline against the S3 container: object put → searchable, the
+ * retrieved context reaches the AI service's prompt, and the register deduplicates by object
+ * key — first write wins, an overwritten object is not silently re-embedded.
  */
 @WithTestResource(S3TestResource.class)
 @QuarkusTest
 class IngestS3BuilderTest {
 
     @Test
-    void bucketIsMirroredIntoTheKnowledgeBase() {
+    void bucketBecomesTheKnowledgeBase() {
         putObject("guides/widget.txt", "The WIDGET-MK1 requires a 12 volt supply.");
 
         await().atMost(120, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).untilAsserted(() -> {
@@ -50,8 +50,8 @@ class IngestS3BuilderTest {
                     "the object must be ingested, got: " + hits);
         });
 
-        // the same knowledge reaches any @RegisterAiService through the auto-produced
-        // RetrievalAugmentor — preview the augmented prompt without calling an LLM
+        // the same knowledge reaches the @RegisterAiService through ManualsAugmentor —
+        // preview the augmented prompt without calling an LLM
         String prompt = RestAssured.given()
                 .queryParam("q", "What supply does the widget require?")
                 .get("/chat/preview")
@@ -60,32 +60,22 @@ class IngestS3BuilderTest {
         assertTrue(prompt.contains("WIDGET-MK1"),
                 "the retrieved context must be incorporated into the prompt, got: " + prompt);
 
+        // first write wins per key: the register deduplicates the re-listed object, so the
+        // overwrite is NOT re-embedded - streams that carry updates need a version-aware id,
+        // and the synchronising engine that mirrors a changing bucket is a later release
         putObject("guides/widget.txt", "The WIDGET-MK2 requires a 24 volt supply.");
+        putObject("guides/gadget.txt", "The GADGET-PRO runs on a 5 volt USB supply.");
 
         await().atMost(120, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).untilAsserted(() -> {
-            List<String> hits = search("What supply does the widget require?");
-            assertTrue(hits.stream().anyMatch(text -> text.contains("WIDGET-MK2")),
-                    "the overwritten object (new ETag) must be re-ingested, got: " + hits);
-            assertFalse(hits.stream().anyMatch(text -> text.contains("WIDGET-MK1")),
-                    "the previous version must be replaced, not joined, got: " + hits);
+            List<String> hits = search("What supply does the gadget require?");
+            assertTrue(hits.stream().anyMatch(text -> text.contains("GADGET-PRO")),
+                    "the new object must be ingested, got: " + hits);
         });
-
-        try (S3Client client = S3TestResource.s3Client()) {
-            client.deleteObject(DeleteObjectRequest.builder()
-                    .bucket(S3TestResource.BUCKET).key("guides/widget.txt").build());
-        }
-
-        await().atMost(120, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).untilAsserted(() -> {
-            List<String> hits = search("What supply does the widget require?");
-            assertFalse(hits.stream().anyMatch(text -> text.contains("WIDGET")),
-                    "a deleted object must disappear from the knowledge base, got: " + hits);
-        });
-    }
-
-    @Test
-    void pipelineGatesReadinessUntilItsFirstPass() {
-        await().atMost(120, TimeUnit.SECONDS).pollInterval(1, TimeUnit.SECONDS).untilAsserted(
-                () -> RestAssured.get("/q/health/ready").then().statusCode(200));
+        List<String> hits = search("What supply does the widget require?");
+        assertTrue(hits.stream().anyMatch(text -> text.contains("WIDGET-MK1")),
+                "the first write must win, got: " + hits);
+        assertFalse(hits.stream().anyMatch(text -> text.contains("WIDGET-MK2")),
+                "the overwrite must be answered skipped, not re-embedded, got: " + hits);
     }
 
     static void putObject(String key, String content) {

@@ -31,8 +31,8 @@
 
     <properties>
 
-        <quarkus.platform.version>3.38.0</quarkus.platform.version>
-        <camel-quarkus.platform.version>3.39.0-SNAPSHOT</camel-quarkus.platform.version>
+        <quarkus.platform.version>3.39.3</quarkus.platform.version>
+        <camel-quarkus.platform.version>3.40.0-SNAPSHOT</camel-quarkus.platform.version>
 
         <quarkus.platform.group-id>io.quarkus</quarkus.platform.group-id>
         <quarkus.platform.artifact-id>quarkus-bom</quarkus.platform.artifact-id>
@@ -42,7 +42,7 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
         <maven.compiler.release>17</maven.compiler.release>
-        <quarkiverse-langchain4j.version>1.12.2</quarkiverse-langchain4j.version>
+        <quarkiverse-langchain4j.version>1.13.1</quarkiverse-langchain4j.version>
 
         <formatter-maven-plugin.version>2.29.0</formatter-maven-plugin.version>
         <groovy-maven-plugin.version>2.1.1</groovy-maven-plugin.version>
@@ -91,10 +91,6 @@
         <dependency>
             <groupId>org.apache.camel.quarkus</groupId>
             <artifactId>camel-quarkus-aws2-s3</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.apache.camel.quarkus</groupId>
-            <artifactId>camel-quarkus-microprofile-health</artifactId>
         </dependency>
         <dependency>
             <groupId>io.quarkus</groupId>

@@ -21,12 +21,11 @@ import dev.langchain4j.service.UserMessage;
 import io.quarkiverse.langchain4j.RegisterAiService;
 
 /**
- * A Quarkus LangChain4j AI service over the knowledge base the pipeline maintains. No RAG
- * wiring: the ingest extension auto-produces a {@code RetrievalAugmentor} for the pipeline, and
- * {@code @RegisterAiService} picks it up as the CDI default — questions are answered from
- * whatever the S3 bucket currently contains.
+ * A Quarkus LangChain4j AI service over the knowledge base the pipeline maintains: questions
+ * are answered from what the S3 bucket contains, retrieved through {@link ManualsAugmentor} —
+ * the one piece of RAG wiring, reading the same store the pipeline writes.
  */
-@RegisterAiService
+@RegisterAiService(retrievalAugmentor = ManualsAugmentor.class)
 public interface ManualsAssistant {
 
     @SystemMessage("You answer questions about product manuals, strictly from the provided context. "
